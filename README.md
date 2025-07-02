@@ -61,3 +61,16 @@ mupen64plus target/mips-nintendo64-none/release/n64_gpt.n64
 Flash the generated ROM onto a flashcart (e.g. an EverDrive&nbsp;64) and
 run it on a Nintendo&nbsp;64 console. Ensure your flashcart supports the
 ROM size produced by the project.
+
+## Validating weight offsets
+
+Before running on real hardware you can verify that the bundled weight
+binary matches the offsets expected by the Rust code. Run the helper
+script from the repository root:
+
+```bash
+python3 n64llm/validate_weights.py
+```
+
+The script prints an error if any section in `n64_model_weights_reduced.bin`
+does not align with the constants in `inference_engine.rs`.
