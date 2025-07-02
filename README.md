@@ -10,6 +10,12 @@ This repository experiments with running a language model on Nintendo 64 hardwar
 The Rust code is the focus for new features. All crates are built with
 `no_std` and target `mips-nintendo64-none`.
 
+## Environment setup
+
+If you are preparing a fresh system, the commands required to install the
+Rust and MIPS toolchains are listed in [docs/setup.md](docs/setup.md). Follow
+those steps to enable full debugging and testing on your machine.
+
 ## Building the Rust project
 
 A custom toolchain is required. Install [`cargo-n64`](https://github.com/rust-console/cargo-n64) and add the `mips-nintendo64-none` target:
