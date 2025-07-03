@@ -2,12 +2,23 @@ import torch
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 import time
 import re
+import os
 
 # 🔹 Load Distilled GPT-2 (Smaller & Faster)
 print("🔹 Loading Distilled GPT-2 model and tokenizer...")
 model_name = "distilgpt2"
-tokenizer = GPT2Tokenizer.from_pretrained(model_name)
-model = GPT2LMHeadModel.from_pretrained(model_name)
+model_dir = os.environ.get("MODEL_DIR")
+try:
+    if model_dir:
+        tokenizer = GPT2Tokenizer.from_pretrained(model_dir)
+        model = GPT2LMHeadModel.from_pretrained(model_dir)
+    else:
+        tokenizer = GPT2Tokenizer.from_pretrained(model_name)
+        model = GPT2LMHeadModel.from_pretrained(model_name)
+except OSError as exc:
+    print(f"⚠️ Failed to download model: {exc}")
+    print("Set MODEL_DIR to a local model directory and retry.")
+    raise SystemExit(1)
 
 # 🔹 Convert Model to FP16 for Better Efficiency
 print("🔹 Converting model to FP16 precision for better responses...")
