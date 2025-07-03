@@ -73,4 +73,6 @@ python3 n64llm/validate_weights.py
 ```
 
 The script prints an error if any section in `n64_model_weights_reduced.bin`
-does not align with the constants in `inference_engine.rs`.
+does not align with the offsets and sizes defined in
+`n64llm/n64-rust/src/inference_engine.rs`. The constants are parsed directly
+from the Rust source so the check always reflects the current build.
