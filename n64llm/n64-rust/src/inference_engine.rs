@@ -347,3 +347,36 @@ impl<'a> ModelState<'a> {
         Ok(vec![max_idx as u32])
     }
 }
+
+#[cfg(test)]
+extern crate std;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn load_layer_out_of_bounds() {
+        let mut mm = MemoryManager::new();
+        let mut state = ModelState::new(&mut mm);
+        let res = state.load_layer_weights(LAYER_OFFSETS.len());
+        assert!(matches!(res, Err(Error::MemoryError)));
+    }
+
+    #[test]
+    fn apply_embeddings_invalid_token() {
+        let mut mm = MemoryManager::new();
+        let mut state = ModelState::new(&mut mm);
+        state.current_layer_weights = vec![0.0; HIDDEN_SIZE];
+        let res = state.apply_embeddings(&[VOCAB_SIZE as u32]);
+        assert!(matches!(res, Err(Error::ComputationError)));
+    }
+
+    #[test]
+    fn generate_output_empty_state() {
+        let mut mm = MemoryManager::new();
+        let state = ModelState::new(&mut mm);
+        let res = state.generate_output();
+        assert!(matches!(res, Err(Error::ComputationError)));
+    }
+}
