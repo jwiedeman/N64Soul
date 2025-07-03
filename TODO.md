@@ -8,7 +8,7 @@
 - [x] Document how to run the project in an emulator and on hardware.
 - [x] Add memory usage diagnostics using `available_memory()` at key runtime points.
 - [x] Exercise `Error` variants in `inference_engine` to test error handling.
-- [ ] Ensure `validate_weights.py` is run whenever model weights change.
+- [x] Ensure `validate_weights.py` is run whenever model weights change.
 - [x] Add controller input logging for debugging purposes.
 - [x] Enable host-side unit tests for tokenizer and math routines.
 - [x] Document the full toolchain setup in the README.

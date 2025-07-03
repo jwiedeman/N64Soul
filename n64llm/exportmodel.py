@@ -104,3 +104,11 @@ total_bytes = total_floats * 2
 print(f"🔹 Total floats exported: {total_floats}")
 print(f"🔹 Total binary size: {total_bytes / (1024*1024):.2f} MB")
 print(f"✅ Export completed! Weights saved to '{OUTPUT_FILENAME}'.")
+
+# Validate the produced weight file against the Rust constants.
+print("🔹 Validating exported weights...")
+script_dir = os.path.dirname(os.path.realpath(__file__))
+validate_script = os.path.join(script_dir, "validate_weights.py")
+ret = os.system(f"python3 {validate_script}")
+if ret != 0:
+    raise SystemExit("Weight validation failed. Please check the export script.")
