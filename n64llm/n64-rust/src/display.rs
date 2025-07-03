@@ -315,19 +315,26 @@ pub fn read_input() -> Option<String> {
             let mut input = String::new();
             if (controller.buttons & n64_sys::A_BUTTON) != 0 {
                 input.push('A');
-            } else if (controller.buttons & n64_sys::B_BUTTON) != 0 {
+            }
+            if (controller.buttons & n64_sys::B_BUTTON) != 0 {
                 input.push('B');
-            } else if (controller.buttons & n64_sys::START_BUTTON) != 0 {
+            }
+            if (controller.buttons & n64_sys::START_BUTTON) != 0 {
                 input.push('\n');
-            } else if (controller.buttons & n64_sys::UP_BUTTON) != 0 {
+            }
+            if (controller.buttons & n64_sys::UP_BUTTON) != 0 {
                 input.push('U');
-            } else if (controller.buttons & n64_sys::DOWN_BUTTON) != 0 {
+            }
+            if (controller.buttons & n64_sys::DOWN_BUTTON) != 0 {
                 input.push('D');
-            } else if (controller.buttons & n64_sys::LEFT_BUTTON) != 0 {
+            }
+            if (controller.buttons & n64_sys::LEFT_BUTTON) != 0 {
                 input.push('L');
-            } else if (controller.buttons & n64_sys::RIGHT_BUTTON) != 0 {
+            }
+            if (controller.buttons & n64_sys::RIGHT_BUTTON) != 0 {
                 input.push('R');
             }
+
             if !input.is_empty() {
                 return Some(input);
             }

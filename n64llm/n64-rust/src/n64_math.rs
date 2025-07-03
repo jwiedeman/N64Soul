@@ -96,3 +96,17 @@ pub fn abs(x: f32) -> f32 {
 pub fn abs_custom(x: f32) -> f32 {
     if x < 0.0 { -x } else { x }
 }
+
+// Approximate e^x using a few terms of its Taylor series. This is
+// sufficient for the softmax used in the toy transformer implementation
+// and avoids pulling in a heavy math library.
+pub fn exp_approx(x: f32) -> f32 {
+    let mut term = 1.0f32;
+    let mut sum = 1.0f32;
+    // Compute 4 additional terms of the series
+    for i in 1..5 {
+        term *= x / (i as f32);
+        sum += term;
+    }
+    sum
+}

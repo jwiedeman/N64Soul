@@ -194,34 +194,111 @@ impl<'a> ModelState<'a> {
     
     fn apply_attention(&mut self) -> Result<(), Error> {
         let seq_len = self.hidden_states.len() / HIDDEN_SIZE;
-        let mut new_states = Vec::with_capacity(seq_len * HIDDEN_SIZE);
-        
-        for i in 0..seq_len {
+        let mat_size = HIDDEN_SIZE * HIDDEN_SIZE;
+
+        // Ensure we have enough weights for a single-head attention layer
+        if self.current_layer_weights.len() < mat_size * 4 {
+            return Err(Error::MemoryError);
+        }
+
+        let (q_w, rest) = self.current_layer_weights.split_at(mat_size);
+        let (k_w, rest) = rest.split_at(mat_size);
+        let (v_w, o_w) = rest.split_at(mat_size);
+
+        let mut q = vec![0.0f32; seq_len * HIDDEN_SIZE];
+        let mut k = vec![0.0f32; seq_len * HIDDEN_SIZE];
+        let mut v = vec![0.0f32; seq_len * HIDDEN_SIZE];
+
+        // Linear projections for Q, K, V
+        for t in 0..seq_len {
             for h in 0..HIDDEN_SIZE {
-                let mut value = 0.0;
-                for j in 0..seq_len {
-                    let diff = (i as f32) - (j as f32);
-                    let weight = 1.0 / (1.0 + n64_math::abs(diff));
-                    value += weight * self.hidden_states[j * HIDDEN_SIZE + h];
+                let mut q_sum = 0.0;
+                let mut k_sum = 0.0;
+                let mut v_sum = 0.0;
+                for i in 0..HIDDEN_SIZE {
+                    let x = self.hidden_states[t * HIDDEN_SIZE + i];
+                    q_sum += x * q_w[h * HIDDEN_SIZE + i];
+                    k_sum += x * k_w[h * HIDDEN_SIZE + i];
+                    v_sum += x * v_w[h * HIDDEN_SIZE + i];
                 }
-                new_states.push(value);
+                q[t * HIDDEN_SIZE + h] = q_sum;
+                k[t * HIDDEN_SIZE + h] = k_sum;
+                v[t * HIDDEN_SIZE + h] = v_sum;
             }
         }
-        
+
+        let mut attended = vec![0.0f32; seq_len * HIDDEN_SIZE];
+        let scale = n64_math::sqrt(HIDDEN_SIZE as f32);
+
+        for t in 0..seq_len {
+            let mut scores = vec![0.0f32; seq_len];
+            let mut sum = 0.0f32;
+            for s in 0..seq_len {
+                let mut dot = 0.0;
+                for h in 0..HIDDEN_SIZE {
+                    dot += q[t * HIDDEN_SIZE + h] * k[s * HIDDEN_SIZE + h];
+                }
+                let score = n64_math::exp_approx(dot / scale);
+                scores[s] = score;
+                sum += score;
+            }
+
+            for s in 0..seq_len {
+                let weight = scores[s] / sum;
+                for h in 0..HIDDEN_SIZE {
+                    attended[t * HIDDEN_SIZE + h] += weight * v[s * HIDDEN_SIZE + h];
+                }
+            }
+        }
+
+        let mut new_states = vec![0.0f32; seq_len * HIDDEN_SIZE];
+        for t in 0..seq_len {
+            for h in 0..HIDDEN_SIZE {
+                let mut sum = 0.0;
+                for i in 0..HIDDEN_SIZE {
+                    sum += attended[t * HIDDEN_SIZE + i] * o_w[h * HIDDEN_SIZE + i];
+                }
+                new_states[t * HIDDEN_SIZE + h] = sum;
+            }
+        }
+
         self.hidden_states = new_states;
         Ok(())
     }
-    
+
     fn apply_ffn(&mut self) -> Result<(), Error> {
         let seq_len = self.hidden_states.len() / HIDDEN_SIZE;
-        let mut new_states = Vec::with_capacity(seq_len * HIDDEN_SIZE);
-        
-        for i in 0..self.hidden_states.len() {
-            let value = if self.hidden_states[i] > 0.0 { self.hidden_states[i] } else { 0.0 };
-            new_states.push(value * 0.9 + 0.1);
+        let mat_size = HIDDEN_SIZE * HIDDEN_SIZE;
+
+        if self.current_layer_weights.len() < mat_size * 2 {
+            return Err(Error::MemoryError);
         }
-        
-        self.hidden_states = new_states;
+
+        let (w1, w2) = self.current_layer_weights.split_at(mat_size);
+
+        let mut hidden = vec![0.0f32; seq_len * HIDDEN_SIZE];
+        for t in 0..seq_len {
+            for h in 0..HIDDEN_SIZE {
+                let mut sum = 0.0;
+                for i in 0..HIDDEN_SIZE {
+                    sum += self.hidden_states[t * HIDDEN_SIZE + i] * w1[h * HIDDEN_SIZE + i];
+                }
+                hidden[t * HIDDEN_SIZE + h] = if sum > 0.0 { sum } else { 0.0 };
+            }
+        }
+
+        let mut output = vec![0.0f32; seq_len * HIDDEN_SIZE];
+        for t in 0..seq_len {
+            for h in 0..HIDDEN_SIZE {
+                let mut sum = 0.0;
+                for i in 0..HIDDEN_SIZE {
+                    sum += hidden[t * HIDDEN_SIZE + i] * w2[h * HIDDEN_SIZE + i];
+                }
+                output[t * HIDDEN_SIZE + h] = sum;
+            }
+        }
+
+        self.hidden_states = output;
         Ok(())
     }
     

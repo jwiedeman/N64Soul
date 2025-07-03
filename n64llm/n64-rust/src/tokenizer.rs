@@ -85,9 +85,12 @@ impl<'a> Tokenizer<'a> {
         true
     }
     
-    pub fn encode(&self, text: &str) -> Vec<u32> {
+    pub fn encode(&mut self, text: &str) -> Vec<u32> {
         // This is a very simplified tokenization
         // A real implementation would use BPE tokenization
+
+        // Ensure the basic vocabulary is loaded so cached tokens work
+        self.load_basic_vocab();
         
         let mut tokens = Vec::new();
         
@@ -116,7 +119,12 @@ impl<'a> Tokenizer<'a> {
                 } else {
                     // Fallback: character-level tokenization
                     if let Some(c) = remain.chars().next() {
-                        tokens.push(c as u32);
+                        // Encode newline explicitly
+                        if c == '\n' {
+                            tokens.push('\n' as u32);
+                        } else {
+                            tokens.push(c as u32);
+                        }
                         pos += c.len_utf8();
                     } else {
                         break;
@@ -126,15 +134,23 @@ impl<'a> Tokenizer<'a> {
         } else {
             // Fallback to character-level tokenization
             for c in text.chars() {
-                tokens.push(c as u32);
+                if c == '\n' {
+                    tokens.push('\n' as u32);
+                } else {
+                    tokens.push(c as u32);
+                }
             }
         }
         
         tokens
     }
     
-    pub fn decode(&self, tokens: &[u32]) -> String {
+    pub fn decode(&mut self, tokens: &[u32]) -> String {
         // Simple decoding
+
+        // Ensure vocabulary is available for reverse lookup
+        self.load_basic_vocab();
+
         let mut text = String::new();
         
         for &token in tokens {
@@ -153,7 +169,9 @@ impl<'a> Tokenizer<'a> {
             
             // Fallback to character-level decoding
             if !found {
-                if let Some(c) = core::char::from_u32(token) {
+                if token == ('\n' as u32) {
+                    text.push('\n');
+                } else if let Some(c) = core::char::from_u32(token) {
                     text.push(c);
                 }
             }
