@@ -6,12 +6,12 @@
 - [x] Replace placeholder attention and FFN code with real transformer operations.
 - [x] Complete tokenizer and controller input logic in `tokenizer.rs` and `display.rs`.
 - [x] Document how to run the project in an emulator and on hardware.
-- [ ] Add memory usage diagnostics using `available_memory()` at key runtime points.
+- [x] Add memory usage diagnostics using `available_memory()` at key runtime points.
 - [ ] Exercise `Error` variants in `inference_engine` to test error handling.
 - [ ] Ensure `validate_weights.py` is run whenever model weights change.
-- [ ] Add controller input logging for debugging purposes.
-- [ ] Enable host-side unit tests for tokenizer and math routines.
-- [ ] Document the full toolchain setup in the README.
+- [x] Add controller input logging for debugging purposes.
+- [x] Enable host-side unit tests for tokenizer and math routines.
+- [x] Document the full toolchain setup in the README.
 
 # Completed
 

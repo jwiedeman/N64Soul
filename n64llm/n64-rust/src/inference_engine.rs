@@ -152,22 +152,33 @@ impl<'a> ModelState<'a> {
     
     pub fn run_inference(&mut self, input_tokens: &[u32]) -> Result<Vec<u32>, Error> {
         self.load_layer_weights(0)?;
+        self.memory_manager.log_usage("embed_load");
         self.apply_embeddings(input_tokens)?;
+        self.memory_manager.log_usage("embed_apply");
         self.unload_layer_weights();
+        self.memory_manager.log_usage("embed_unload");
 
         for layer_idx in 0..NUM_LAYERS {
             self.load_layer_weights(layer_idx * 2 + 1)?;
+            self.memory_manager.log_usage("attn_load");
             self.apply_attention()?;
+            self.memory_manager.log_usage("attn_apply");
             self.unload_layer_weights();
+            self.memory_manager.log_usage("attn_unload");
 
             self.load_layer_weights(layer_idx * 2 + 2)?;
+            self.memory_manager.log_usage("ffn_load");
             self.apply_ffn()?;
+            self.memory_manager.log_usage("ffn_apply");
             self.unload_layer_weights();
+            self.memory_manager.log_usage("ffn_unload");
         }
 
         self.load_layer_weights(NUM_LAYERS * 2 + 1)?;
+        self.memory_manager.log_usage("out_load");
         let output_tokens = self.generate_output()?;
         self.unload_layer_weights();
+        self.memory_manager.log_usage("out_unload");
         Ok(output_tokens)
     }
     

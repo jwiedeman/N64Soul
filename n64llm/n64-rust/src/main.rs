@@ -26,6 +26,7 @@ pub extern "C" fn main() -> ! {
     // Initialize memory management system.
     let mut memory = unsafe { memory_manager::init() };
     display::print_line("Memory manager initialized");
+    memory.log_usage("init");
 
     // Main interactive loop.
     display::print_line("\nEnter text with the controller:");
@@ -66,6 +67,7 @@ pub extern "C" fn main() -> ! {
                     let mut tokenizer = tokenizer::Tokenizer::new(&mut memory);
                     tokenizer.decode(&output_tokens)
                 };
+                memory.log_usage("post_infer");
 
                 display::print_line(&format!("Output: {}", output_text));
 
@@ -86,6 +88,7 @@ fn delay(ms: u32) {
     }
 }
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
     display::print_line("PANIC: System error occurred");
