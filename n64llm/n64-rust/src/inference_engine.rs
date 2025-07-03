@@ -71,6 +71,7 @@ pub struct ModelState<'a> {
     layer_index: usize,
     hidden_states: Vec<f32>,
     memory_manager: &'a mut MemoryManager,
+    last_checkpoint: Option<usize>,
 }
 
 impl<'a> ModelState<'a> {
@@ -81,6 +82,7 @@ impl<'a> ModelState<'a> {
             layer_index: 0,
             hidden_states,
             memory_manager,
+            last_checkpoint: None,
         }
     }
     
@@ -88,16 +90,28 @@ impl<'a> ModelState<'a> {
         if layer_idx >= LAYER_OFFSETS.len() {
             return Err(Error::MemoryError);
         }
-        
+
+        // Create a checkpoint so the weights can be freed after use
+        let cp = self.memory_manager.checkpoint();
+        self.last_checkpoint = Some(cp);
+
         let offset = LAYER_OFFSETS[layer_idx];
         let size = LAYER_SIZES[layer_idx];
-        
+
         self.current_layer_weights = Vec::with_capacity(size / 4); // 4 bytes per f32
         
         self.read_from_rom(offset, size)?;
         
         self.layer_index = layer_idx;
         Ok(())
+    }
+
+    fn unload_layer_weights(&mut self) {
+        if let Some(_cp) = self.last_checkpoint {
+            self.memory_manager.pop_checkpoint();
+            self.last_checkpoint = None;
+        }
+        self.current_layer_weights.clear();
     }
     
     /// Read `size` bytes from ROM at (base address + offset) using DMA.
@@ -139,17 +153,21 @@ impl<'a> ModelState<'a> {
     pub fn run_inference(&mut self, input_tokens: &[u32]) -> Result<Vec<u32>, Error> {
         self.load_layer_weights(0)?;
         self.apply_embeddings(input_tokens)?;
-        
+        self.unload_layer_weights();
+
         for layer_idx in 0..NUM_LAYERS {
             self.load_layer_weights(layer_idx * 2 + 1)?;
             self.apply_attention()?;
-            
+            self.unload_layer_weights();
+
             self.load_layer_weights(layer_idx * 2 + 2)?;
             self.apply_ffn()?;
+            self.unload_layer_weights();
         }
-        
+
         self.load_layer_weights(NUM_LAYERS * 2 + 1)?;
         let output_tokens = self.generate_output()?;
+        self.unload_layer_weights();
         Ok(output_tokens)
     }
     
