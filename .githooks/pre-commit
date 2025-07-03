@@ -1,0 +1,11 @@
+#!/bin/sh
+# Validate model weights if they were modified in this commit
+FILES="$(git diff --cached --name-only)"
+if echo "$FILES" | grep -q "n64llm/n64-rust/src/n64_model_weights_reduced.bin"; then
+    echo "Running n64llm/validate_weights.py..."
+    python3 n64llm/validate_weights.py || {
+        echo "Weight validation failed. Aborting commit." >&2
+        exit 1
+    }
+fi
+

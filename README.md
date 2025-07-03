@@ -90,3 +90,16 @@ The script prints an error if any section in `n64_model_weights_reduced.bin`
 does not align with the offsets and sizes defined in
 `n64llm/n64-rust/src/inference_engine.rs`. The constants are parsed directly
 from the Rust source so the check always reflects the current build.
+
+### Git hook for automatic validation
+
+To ensure this validation runs whenever model weights are updated, a sample
+pre-commit hook is provided in `.githooks/pre-commit`. Enable it with:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+With the hook active, any commit that modifies
+`n64llm/n64-rust/src/n64_model_weights_reduced.bin` will automatically invoke
+`validate_weights.py` and abort the commit if the offsets do not match.
