@@ -76,6 +76,16 @@ impl MemoryManager {
             false
         }
     }
+
+    // Restore to the most recent checkpoint and remove it
+    pub fn pop_checkpoint(&mut self) -> bool {
+        if self.current_checkpoint == 0 {
+            return false;
+        }
+        self.current_checkpoint -= 1;
+        self.next_free = self.checkpoints[self.current_checkpoint];
+        true
+    }
     
     // Reset all allocations (useful between inference steps)
     pub fn reset(&mut self) {
