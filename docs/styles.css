@@ -1,0 +1,43 @@
+body {
+    display: grid;
+    grid-template-columns: 1fr 250px;
+    gap: 2rem;
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 1rem;
+}
+
+header {
+    grid-column: 1 / -1;
+}
+
+.sidebar {
+    position: sticky;
+    top: 2rem;
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-width: 250px;
+}
+
+.sidebar .toc {
+    list-style: none;
+    padding-left: 0;
+}
+
+.sidebar .toc ul {
+    margin-top: 0.25rem;
+    margin-left: 1rem;
+    list-style: disc;
+}
+
+.sidebar h2 {
+    margin-bottom: 0.25rem;
+    font-size: 1rem;
+}
+
+.sidebar time {
+    font-size: 0.9rem;
+    color: #555;
+}
