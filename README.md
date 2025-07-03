@@ -12,9 +12,23 @@ The Rust code is the focus for new features. All crates are built with
 
 ## Environment setup
 
-If you are preparing a fresh system, the commands required to install the
-Rust and MIPS toolchains are listed in [docs/setup.md](docs/setup.md). Follow
-those steps to enable full debugging and testing on your machine.
+If you are preparing a fresh system you will need both the Rust `cargo-n64`
+toolchain and the libdragon MIPS toolchain. The exact commands are copied
+below for convenience. See [docs/setup.md](docs/setup.md) for more detail.
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+rustup target add mips-nintendo64-none
+cargo install cargo-n64
+
+git clone https://github.com/dragonminded/libdragon.git
+cd libdragon
+make toolchain
+export PATH="$PWD/mips64-elf/bin:$PATH"
+```
+
+After installing these tools you can build and run the examples as described
+below.
 
 ## Building the Rust project
 

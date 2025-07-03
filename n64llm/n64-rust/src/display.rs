@@ -2,6 +2,7 @@
 // N64 display handling
 
 use alloc::string::String;
+use alloc::format;
 use crate::n64_sys;
 
 // N64 display buffer address (adjust for real hardware)
@@ -312,6 +313,7 @@ pub fn read_input() -> Option<String> {
     unsafe {
         let controller = n64_sys::read_controller(n64_sys::CONTROLLER_1);
         if controller.buttons != 0 {
+            print_line(&format!("[input] buttons: {:#06x}", controller.buttons));
             let mut input = String::new();
             if (controller.buttons & n64_sys::A_BUTTON) != 0 {
                 input.push('A');

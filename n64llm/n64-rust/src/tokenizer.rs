@@ -180,3 +180,24 @@ impl<'a> Tokenizer<'a> {
         text
     }
 }
+
+#[cfg(test)]
+extern crate std;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn roundtrip_simple() {
+        let mut mm = MemoryManager::new();
+        let mut tok = Tokenizer {
+            memory_manager: &mut mm,
+            vocab_cache: Vec::new(),
+            vocab_loaded: true,
+        };
+        let tokens = tok.encode("hi");
+        let text = tok.decode(&tokens);
+        assert_eq!(text, "hi");
+    }
+}

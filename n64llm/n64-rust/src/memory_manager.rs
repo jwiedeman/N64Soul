@@ -107,6 +107,20 @@ impl MemoryManager {
     pub fn used_memory(&self) -> usize {
         self.next_free - self.heap_start
     }
+
+    // Log current memory usage with a label for debugging
+    pub fn log_usage(&self, label: &str) {
+        use alloc::format;
+        use crate::display;
+
+        let msg = format!(
+            "[mem] {}: used {} / {} bytes",
+            label,
+            self.used_memory(),
+            self.total_memory()
+        );
+        display::print_line(&msg);
+    }
 }
 
 // Initialize the memory manager

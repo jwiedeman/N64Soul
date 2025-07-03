@@ -110,3 +110,24 @@ pub fn exp_approx(x: f32) -> f32 {
     }
     sum
 }
+
+#[cfg(test)]
+extern crate std;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deg_rad_roundtrip() {
+        let d = 90.0f32;
+        let r = deg_to_rad(d);
+        assert!((rad_to_deg(r) - d).abs() < 0.01);
+    }
+
+    #[test]
+    fn vec2_length() {
+        let v = Vec2::new(3.0, 4.0);
+        assert!((v.length() - 5.0).abs() < 0.01);
+    }
+}
