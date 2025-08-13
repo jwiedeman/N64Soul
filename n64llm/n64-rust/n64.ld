@@ -6,8 +6,8 @@ ENTRY(_start)
 MEMORY
 {
     /* ROM region: This is where your code, constants, and model weights reside.
-       Adjust LENGTH to match your cartridge size. Here we assume 32 MB. */
-    ROM (rx)  : ORIGIN = 0x10000000, LENGTH = 32M
+       Adjust LENGTH to match your cartridge size. Here we assume ~480 MB. */
+    ROM (rx)  : ORIGIN = 0x10000000, LENGTH = 480M
 
     /* RDRAM region: Base N64 has 4 MB of RAM.
        All writable data (.data, .bss, heap, stack) live here. */
@@ -28,14 +28,13 @@ SECTIONS
         *(.rodata*)
     } > ROM
 
-    /* .model_weights: Dedicated section for model weights.
-       This section is explicitly placed at 0x10000000.
-       When you embed your weights file using a #[link_section] attribute,
-       its contents will be placed here. */
-    .model_weights 0x10000000 : ALIGN(4)
+    /* .model_weights: Dedicated section for model weights. */
+    __model_weights_rom_start = .;
+    .model_weights ALIGN(64) :
     {
-         KEEP(*(.model_weights))
+         KEEP(*(.model_weights*))
     } > ROM
+    __model_weights_rom_end = .;
 
     /* .data: Initialized mutable data goes into RDRAM */
     .data : ALIGN(4)
