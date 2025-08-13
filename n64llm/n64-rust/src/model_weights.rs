@@ -1,9 +1,25 @@
 #![no_std]
 
-/// This static variable embeds the entire model weights binary into the ROM image.
-/// The `#[link_section = ".model_weights"]` attribute tells the linker to place
-/// this data into the `.model_weights` section, which should be mapped to the desired
-/// ROM address in your linker script (e.g. 0x10000000).
 #[link_section = ".model_weights"]
+#[no_mangle]
 #[used]
-pub static MODEL_WEIGHTS: &[u8] = include_bytes!("n64_model_weights_reduced.bin");
+pub static MODEL_WEIGHTS: [u8; include_bytes!("../../assets/weights.bin").len()] =
+    *include_bytes!("../../assets/weights.bin");
+
+extern "C" {
+    static __model_weights_rom_start: u8;
+    static __model_weights_rom_end: u8;
+}
+
+#[inline(always)]
+pub fn weights_rom_base() -> usize {
+    unsafe { &__model_weights_rom_start as *const u8 as usize }
+}
+
+#[inline(always)]
+pub fn weights_rom_size() -> usize {
+    unsafe {
+        (&__model_weights_rom_end as *const u8 as usize)
+            - (&__model_weights_rom_start as *const u8 as usize)
+    }
+}
