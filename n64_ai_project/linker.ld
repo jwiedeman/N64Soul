@@ -10,7 +10,7 @@ MEMORY
 _gp = 0x80010000;
 
 /* Stack Setup */
-__stack_top = ORIGIN(RAM) + LENGTH(RAM) - 0x2000;  /* 8KB stack size */
+__stack_top = ORIGIN(RAM) + LENGTH(RAM) - 0x4000;  /* 16KB stack */
 
 SECTIONS {
     /* Code */
@@ -21,7 +21,7 @@ SECTIONS {
     } > RAM AT>ROM
 
     /* Read-only Data */
-    .rodata : ALIGN(16) {
+    .rodata : ALIGN(32) {
         *(.rodata)
         *(.rodata.*)
     } > RAM AT>ROM
@@ -42,10 +42,25 @@ SECTIONS {
         _bss_end = .;
     } > RAM
 
-    /* Stack (Fixed 8KB) */
+    /* DMA-safe buffer */
+    .dmabuf (NOLOAD) : ALIGN(32) {
+        __dmabuf_start = .;
+        . += 0x20000; /* 128KB */
+        __dmabuf_end = .;
+    } > RAM
+
+    /* Weight paging buffers */
+    .weights (NOLOAD) : ALIGN(32) {
+        __weights_page0 = .;
+        . += 0x10000; /* 64KB */
+        __weights_page1 = .;
+        . += 0x10000; /* 64KB */
+    } > RAM
+
+    /* Stack */
     .stack (NOLOAD) : ALIGN(16) {
         __stack_bottom = .;
-        . = __stack_top - 0x2000;  /* Reduce stack to 8KB */
+        . = __stack_top - 0x4000;  /* 16KB stack */
         __stack_top = .;
     } > RAM
 }

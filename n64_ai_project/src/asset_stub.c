@@ -1,17 +1,20 @@
 #include <stddef.h>
 #include <string.h>
+#include <stdio.h>
+#include "n64.h"
+#include "runtime.h"
 
-// Minimal stub implementations
-int printf(const char *format, ...) { return 0; }
-int puts(const char *s) { return 0; }
-int fprintf(void *stream, const char *format, ...) { return 0; }
-int fputc(int c, void *stream) { return 0; }
-void _exit(int status) { while(1) {} }
+/* Minimal syscall stubs */
+void _exit(int status) {
+    printf("EXIT %d\n", status);
+    while (1) { WATCHDOG_TICK(1000); }
+}
+
 int isatty(int fd) { return 0; }
 void *sbrk(int increment) { return (void*)-1; }
 void _flush_cache(void) {}
 
-// Memory-related functions
+/* Memory-related functions */
 void *memset(void *s, int c, size_t n) {
     unsigned char *p = s;
     while (n--) *p++ = (unsigned char)c;
@@ -34,7 +37,7 @@ void *memcpy(void *dest, const void *src, size_t n) {
     return dest;
 }
 
-// Required stubs
+/* Required stubs */
 int getpid() { return 1; }
 void hook_stdio_calls() {}
 int fstat(int fd, void *buf) { return -1; }

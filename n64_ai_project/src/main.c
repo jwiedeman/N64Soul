@@ -1,23 +1,25 @@
 #include <stdio.h>
 #include "n64.h"
-#include "ai.h"  // Include the AI function header
+#include "ai.h"
+#include "runtime.h"
 
-int main(void)   // Change `void main(void)` to `int main(void)`
+int main(void)
 {
-    // N64 Graphics Setup
     console_init();
     console_clear();
 
-    // Display Welcome Message
     printf("N64 AI Booting...\n");
 
-    // Run AI Function
     char response[256];
-    process_ai("What is the Void’s true function?", response); // Now properly declared
-
-    // Print AI Response
+    process_ai("What is the Void’s true function?", response);
     printf("%s\n", response);
 
-    // Loop forever (N64 needs a main loop)
-    while (1);
+    const char spinner[] = "|/-\\";
+    int spin = 0;
+    for (;;) {
+        printf("\r%c", spinner[spin++ & 3]);
+        console_flush();
+        WATCHDOG_TICK(16);
+    }
+    return 0;
 }

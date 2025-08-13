@@ -1,15 +1,26 @@
-RUST_PROJECT = ../n64llm/n64-rust
-TARGET = n64_soul.z64
-ROM_BIN = $(RUST_PROJECT)/target/mips-nintendo64-none/release/n64-rust
+CC      = mips64-elf-gcc
+LD      = mips64-elf-gcc
+OBJCOPY = mips64-elf-objcopy
+TARGET  = n64_ai.elf
 
-all: $(TARGET)
+SRC = $(wildcard src/*.c)
+OBJ = $(SRC:.c=.o)
 
-$(ROM_BIN):
-cargo build --release --manifest-path $(RUST_PROJECT)/Cargo.toml --target mips-nintendo64-none || true
+CFLAGS_COMMON = -G0 -nostdlib -ffreestanding -march=vr4300 -mabi=32 -Wall -Wextra -Wl,--gc-sections
+LDFLAGS = -T linker.ld -nostdlib -Wl,--gc-sections
 
-$(TARGET): $(ROM_BIN)
-n64tool -l $(TARGET) -t "N64SOUL" -h 6102 $(ROM_BIN)
+release: CFLAGS = -O2 $(CFLAGS_COMMON)
+release: $(TARGET)
+
+debug: CFLAGS = -O0 -g -fno-inline $(CFLAGS_COMMON)
+debug: $(TARGET)
+
+$(TARGET): $(OBJ)
+	$(LD) $(CFLAGS) $(OBJ) $(LDFLAGS) -o $@
+	size $@
+	nm -n $@ > $(TARGET:.elf=.map)
 
 clean:
-cargo clean --manifest-path $(RUST_PROJECT)/Cargo.toml || true
-rm -f $(TARGET)
+	rm -f $(OBJ) $(TARGET) $(TARGET:.elf=.map)
+
+.PHONY: release debug clean
