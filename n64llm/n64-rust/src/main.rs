@@ -16,6 +16,7 @@ mod inference_engine;
 mod tokenizer;
 mod display;
 mod memory_manager;
+mod diag;
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
@@ -24,6 +25,18 @@ pub extern "C" fn main() -> ! {
     display::clear();
     display::print_line("N64 GPT - Flash-Streamed AI Model");
     display::print_line("Initializing...");
+
+    display::print_line("Probing ROM...");
+    diag::rom_probe::rom_probe(|off, buf| {
+        unsafe {
+            n64_sys::pi_read(
+                buf.as_mut_ptr(),
+                (n64_sys::CART_ROM_BASE as u32).wrapping_add(off as u32),
+                buf.len() as u32,
+            );
+        }
+        true
+    });
 
     // Initialize memory management system.
     let mut memory = unsafe { memory_manager::init() };
