@@ -2,21 +2,23 @@
 #![no_main]
 
 extern crate alloc;
+mod config;
+mod ipl3;
 mod model_weights;
 mod n64_math;
 mod n64_sys;
-mod ipl3;
 
+use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::panic::PanicInfo;
-use alloc::format;
 
-mod inference_engine;
-mod tokenizer;
-mod display;
-mod memory_manager;
 mod diag;
+mod display;
+mod inference_engine;
+mod io;
+mod memory_manager;
+mod tokenizer;
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
