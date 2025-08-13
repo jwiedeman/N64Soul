@@ -2,7 +2,7 @@ use crate::{
     config,
     io::{dbuf::Dbuf, rom_reader::RomReader},
     manifest::Manifest,
-    model_weights::weights_rom_base,
+    model_weights::{weights_rom_base, weights_rom_size},
 };
 
 /// Streams a model layer from ROM using a [`RomReader`] and double buffering.
@@ -22,6 +22,9 @@ where
     }
 
     let layer = &manifest.layers[layer_idx];
+    if layer.offset as usize + layer.size as usize > weights_rom_size() {
+        return false;
+    }
     let mut off = layer.offset as u64 + weights_rom_base() as u64;
     let mut remain = layer.size as u64;
 
