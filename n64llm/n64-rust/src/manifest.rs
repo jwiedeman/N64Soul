@@ -1,5 +1,5 @@
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
+use crate::{config, model_weights};
 
 #[derive(Debug, Clone)]
 pub struct Layer {
@@ -15,7 +15,11 @@ pub struct Manifest {
 
 pub fn load() -> Manifest {
     let json = include_str!("../../assets/weights.manifest.json");
-    parse(json)
+    let manifest = parse(json);
+    if !validate(&manifest) {
+        panic!("invalid weights manifest");
+    }
+    manifest
 }
 
 fn parse(json: &str) -> Manifest {
@@ -60,4 +64,22 @@ fn parse(json: &str) -> Manifest {
         }
     }
     Manifest { layers }
+}
+
+fn validate(m: &Manifest) -> bool {
+    let mut last_end = 0u32;
+    for layer in &m.layers {
+        if layer.offset % config::ROM_ALIGN as u32 != 0 {
+            return false;
+        }
+        if layer.offset < last_end {
+            return false;
+        }
+        let end = layer.offset + layer.size;
+        if end as usize > model_weights::weights_rom_size() {
+            return false;
+        }
+        last_end = end;
+    }
+    true
 }
