@@ -3,5 +3,6 @@
 
 void console_init(void);
 void console_clear(void);
+void console_flush(void);
 
-#endif
+#endif /* N64_H */
