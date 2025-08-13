@@ -1,14 +1,14 @@
 # TODO
 
 - [x] Confirm ROM layout and address mapping in `n64.ld` for `.model_weights`.
-- [x] Validate `n64_model_weights_reduced.bin` offsets against `LAYER_OFFSETS` and `LAYER_SIZES` in `inference_engine.rs`.
+- [x] Validate `weights.bin` against `weights.manifest.json` using `tools/validate_weights.py`.
 - [x] Implement efficient layer streaming with checkpoints in `memory_manager.rs`.
 - [x] Replace placeholder attention and FFN code with real transformer operations.
 - [x] Complete tokenizer and controller input logic in `tokenizer.rs` and `display.rs`.
 - [x] Document how to run the project in an emulator and on hardware.
 - [x] Add memory usage diagnostics using `available_memory()` at key runtime points.
 - [x] Exercise `Error` variants in `inference_engine` to test error handling.
-- [x] Ensure `validate_weights.py` is run whenever model weights change.
+- [x] Ensure `tools/validate_weights.py` is run whenever model weights change.
 - [x] Add controller input logging for debugging purposes.
 - [x] Enable host-side unit tests for tokenizer and math routines.
 - [x] Document the full toolchain setup in the README.

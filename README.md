@@ -76,20 +76,31 @@ Flash the generated ROM onto a flashcart (e.g. an EverDrive&nbsp;64) and
 run it on a Nintendo&nbsp;64 console. Ensure your flashcart supports the
 ROM size produced by the project.
 
-## Validating weight offsets
+## Exporting model weights
 
-Before running on real hardware you can verify that the bundled weight
-binary matches the offsets expected by the Rust code. Run the helper
-script from the repository root:
+Model weights live in `n64llm/assets/weights.bin` with layout described by
+`weights.manifest.json`. The helper script `tools/export_model.py` can combine
+individual layer files into these artifacts:
 
 ```bash
-python3 n64llm/validate_weights.py
+python tools/export_model.py tok_embeddings=emb.bin attn_q_0=attn0.bin
 ```
 
-The script prints an error if any section in `n64_model_weights_reduced.bin`
-does not align with the offsets and sizes defined in
-`n64llm/n64-rust/src/inference_engine.rs`. The constants are parsed directly
-from the Rust source so the check always reflects the current build.
+Each `name=path` pair becomes an aligned segment in the resulting blob and is
+recorded in the manifest.
+
+## Validating weight offsets
+
+Before running on real hardware you can verify that the bundled weight blob
+matches its manifest. Run the helper script from the repository root:
+
+```bash
+python tools/validate_weights.py
+```
+
+The script checks that `n64llm/assets/weights.bin` exists, that each layer in
+`weights.manifest.json` is 64-byte aligned, and that the sizes sum to the file
+length.
 
 ### Git hook for automatic validation
 
@@ -101,5 +112,5 @@ git config core.hooksPath .githooks
 ```
 
 With the hook active, any commit that modifies
-`n64llm/n64-rust/src/n64_model_weights_reduced.bin` will automatically invoke
-`validate_weights.py` and abort the commit if the offsets do not match.
+`n64llm/assets/weights.bin` will automatically invoke
+`tools/validate_weights.py` and abort the commit if validation fails.
