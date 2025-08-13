@@ -345,6 +345,89 @@ pub fn read_input() -> Option<String> {
     }
 }
 
+// Simple on-screen keyboard driven by the controller D-Pad and buttons.
+// Returns `true` when the user presses START to submit the current buffer.
+pub fn keyboard_input(buffer: &mut String) -> bool {
+    const KEYBOARD: [&str; 4] = [
+        "ABCDEFGHIJ",
+        "KLMNOPQRST",
+        "UVWXYZ0123",
+        "456789.,? ",
+    ];
+
+    unsafe {
+        static mut KB_ROW: usize = 0;
+        static mut KB_COL: usize = 0;
+
+        let controller = n64_sys::read_controller(n64_sys::CONTROLLER_1);
+        let mut updated = false;
+
+        if (controller.buttons & n64_sys::UP_BUTTON) != 0 && KB_ROW > 0 {
+            KB_ROW -= 1;
+            updated = true;
+        }
+        if (controller.buttons & n64_sys::DOWN_BUTTON) != 0 && KB_ROW + 1 < KEYBOARD.len() {
+            KB_ROW += 1;
+            updated = true;
+        }
+        if (controller.buttons & n64_sys::LEFT_BUTTON) != 0 && KB_COL > 0 {
+            KB_COL -= 1;
+            updated = true;
+        }
+        if (controller.buttons & n64_sys::RIGHT_BUTTON) != 0 && KB_COL + 1 < KEYBOARD[KB_ROW].len() {
+            KB_COL += 1;
+            updated = true;
+        }
+
+        if (controller.buttons & n64_sys::A_BUTTON) != 0 {
+            let ch = KEYBOARD[KB_ROW].as_bytes()[KB_COL] as char;
+            buffer.push(ch);
+            updated = true;
+        }
+        if (controller.buttons & n64_sys::B_BUTTON) != 0 {
+            buffer.pop();
+            updated = true;
+        }
+
+        if updated {
+            // redraw prompt and keyboard
+            print_line(&format!("Input: {}", buffer));
+            for (r, row) in KEYBOARD.iter().enumerate() {
+                let mut line = String::new();
+                for (c, ch) in row.chars().enumerate() {
+                    if r == KB_ROW && c == KB_COL {
+                        line.push('[');
+                        line.push(ch);
+                        line.push(']');
+                    } else {
+                        line.push(' ');
+                        line.push(ch);
+                        line.push(' ');
+                    }
+                }
+                print_line(&line);
+            }
+        }
+
+        (controller.buttons & n64_sys::START_BUTTON) != 0
+    }
+}
+
+// Display a simple progress indicator while running inference.
+pub fn show_progress(current: usize, total: usize) {
+    let bar_width = 20;
+    let filled = bar_width * current / total;
+    let mut bar = String::new();
+    for i in 0..bar_width {
+        if i < filled {
+            bar.push('#');
+        } else {
+            bar.push('-');
+        }
+    }
+    print_line(&format!("Working... [{}] {}/{}", bar, current, total));
+}
+
 // Scroll the display up by one character row
 fn scroll_display() {
     unsafe {

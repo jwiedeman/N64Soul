@@ -1,24 +1,15 @@
-CC = mips64-elf-gcc
-CFLAGS = -Wall -O2 -G0 -march=vr4300 -mtune=vr4300 -mabi=32 -ffreestanding -nostdlib -mfix4300 -ffunction-sections -fdata-sections
-LDFLAGS = -T linker.ld -ldragon -lnosys -lc -Wl,--gc-sections -mabi=32 -march=vr4300 -mtune=vr4300
-
-TARGET = n64_ai_project.z64
-
-SRC_DIR = src
-OBJ_DIR = obj
-SRCS = $(wildcard $(SRC_DIR)/*.c) 
-OBJS = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
+RUST_PROJECT = ../n64llm/n64-rust
+TARGET = n64_soul.z64
+ROM_BIN = $(RUST_PROJECT)/target/mips-nintendo64-none/release/n64-rust
 
 all: $(TARGET)
 
-$(OBJ_DIR):
-	mkdir -p $(OBJ_DIR)
+$(ROM_BIN):
+cargo build --release --manifest-path $(RUST_PROJECT)/Cargo.toml --target mips-nintendo64-none || true
 
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
-	$(CC) $(CFLAGS) -Iinclude -c $< -o $@
-
-$(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) $(OBJS) $(LDFLAGS) -o $@
+$(TARGET): $(ROM_BIN)
+n64tool -l $(TARGET) -t "N64SOUL" -h 6102 $(ROM_BIN)
 
 clean:
-	rm -rf $(OBJ_DIR) $(TARGET)
+cargo clean --manifest-path $(RUST_PROJECT)/Cargo.toml || true
+rm -f $(TARGET)
