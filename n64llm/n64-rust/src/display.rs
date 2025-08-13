@@ -7,14 +7,17 @@ use crate::n64_sys;
 
 // N64 display buffer address (adjust for real hardware)
 const DISPLAY_BUFFER: *mut u16 = 0xA0400000 as *mut u16;
-const DISPLAY_WIDTH: usize = 320;
-const DISPLAY_HEIGHT: usize = 240;
+pub const DISPLAY_WIDTH: usize = 320;
+pub const DISPLAY_HEIGHT: usize = 240;
 const CHAR_WIDTH: usize = 8;
 const CHAR_HEIGHT: usize = 8;
 
 // Current cursor position
 static mut CURSOR_X: usize = 0;
 static mut CURSOR_Y: usize = 0;
+
+static mut PROGRESS_TOTAL: usize = 0;
+static mut PROGRESS_CURRENT: usize = 0;
 
 // Full font data for 96 printable ASCII characters (32–127)
 // Each entry is an 8-byte array representing an 8×8 bitmap.
@@ -305,6 +308,54 @@ pub fn print(text: &str) {
 pub fn print_line(text: &str) {
     print(text);
     print_char('\n');
+}
+
+// Set cursor position in character coordinates
+pub fn set_cursor(char_x: usize, char_y: usize) {
+    unsafe {
+        CURSOR_X = char_x * CHAR_WIDTH;
+        CURSOR_Y = char_y * CHAR_HEIGHT;
+    }
+}
+
+// Number of text lines available on screen
+pub fn screen_lines() -> usize {
+    DISPLAY_HEIGHT / CHAR_HEIGHT
+}
+
+pub fn progress_start(total: usize) {
+    unsafe {
+        PROGRESS_TOTAL = total;
+        PROGRESS_CURRENT = 0;
+    }
+    print_line("Working...");
+    draw_progress();
+}
+
+pub fn progress_step() {
+    unsafe {
+        if PROGRESS_CURRENT < PROGRESS_TOTAL {
+            PROGRESS_CURRENT += 1;
+        }
+    }
+    draw_progress();
+}
+
+pub fn progress_end() {
+    print_line("Done");
+}
+
+fn draw_progress() {
+    let (current, total) = unsafe { (PROGRESS_CURRENT, PROGRESS_TOTAL) };
+    if total == 0 { return; }
+    let width = 20;
+    let filled = current * width / total;
+    let mut bar = String::new();
+    for i in 0..width {
+        if i < filled { bar.push('#'); } else { bar.push('-'); }
+    }
+    let percent = current * 100 / total;
+    print_line(&format!("[{}] {}%", bar, percent));
 }
 
 // New: Read input from the N64 controller.

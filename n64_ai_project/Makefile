@@ -1,24 +1,14 @@
-CC = mips64-elf-gcc
-CFLAGS = -Wall -O2 -G0 -march=vr4300 -mtune=vr4300 -mabi=32 -ffreestanding -nostdlib -mfix4300 -ffunction-sections -fdata-sections
-LDFLAGS = -T linker.ld -ldragon -lnosys -lc -Wl,--gc-sections -mabi=32 -march=vr4300 -mtune=vr4300
+RUST_PROJECT = ../n64llm/n64-rust
+ROM = n64_gpt.z64
 
-TARGET = n64_ai_project.z64
+all: $(ROM)
 
-SRC_DIR = src
-OBJ_DIR = obj
-SRCS = $(wildcard $(SRC_DIR)/*.c) 
-OBJS = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
-
-all: $(TARGET)
-
-$(OBJ_DIR):
-	mkdir -p $(OBJ_DIR)
-
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
-	$(CC) $(CFLAGS) -Iinclude -c $< -o $@
-
-$(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) $(OBJS) $(LDFLAGS) -o $@
+$(ROM):
+# Build the Rust N64 binary (requires custom toolchain)
+cargo build --manifest-path $(RUST_PROJECT)/Cargo.toml --release --target mips-nintendo64-none
+# Package the ROM using n64tool (part of Libdragon)
+n64tool -l 8M -t "N64 GPT" -h $(RUST_PROJECT)/target/mips-nintendo64-none/release/ipl3.bin -o $(ROM) $(RUST_PROJECT)/target/mips-nintendo64-none/release/n64_gpt
 
 clean:
-	rm -rf $(OBJ_DIR) $(TARGET)
+cargo clean --manifest-path $(RUST_PROJECT)/Cargo.toml
+rm -f $(ROM)

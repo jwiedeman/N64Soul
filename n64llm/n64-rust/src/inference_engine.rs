@@ -3,6 +3,7 @@ use core::result::Result;
 use core::fmt;
 use crate::memory_manager::MemoryManager;
 use crate::n64_sys::{PI_STATUS_REG, PI_STATUS_IO_BUSY, PI_STATUS_DMA_BUSY, pi_read};
+use crate::display;
 use alloc::vec;
 use crate::n64_math;
 
@@ -26,8 +27,9 @@ impl fmt::Display for Error {
 // Constants for model configuration
 const NUM_LAYERS: usize = 6;  // Reduced from standard DistilGPT2
 const HIDDEN_SIZE: usize = 384; // Reduced for memory constraints
-const VOCAB_SIZE: usize = 25000; // Approximate for GPT-2 
+const VOCAB_SIZE: usize = 25000; // Approximate for GPT-2
 const MAX_SEQ_LENGTH: usize = 128; // Reduced max sequence length
+const PROGRESS_STEPS: usize = 1 + NUM_LAYERS * 2 + 1; // embed + attn/ffn + output
 
 // Offsets and sizes (in bytes) of each weight segment in ROM.
 // These must match the layout produced by your export script.
@@ -151,12 +153,15 @@ impl<'a> ModelState<'a> {
     }
     
     pub fn run_inference(&mut self, input_tokens: &[u32]) -> Result<Vec<u32>, Error> {
+        display::progress_start(PROGRESS_STEPS);
+
         self.load_layer_weights(0)?;
         self.memory_manager.log_usage("embed_load");
         self.apply_embeddings(input_tokens)?;
         self.memory_manager.log_usage("embed_apply");
         self.unload_layer_weights();
         self.memory_manager.log_usage("embed_unload");
+        display::progress_step();
 
         for layer_idx in 0..NUM_LAYERS {
             self.load_layer_weights(layer_idx * 2 + 1)?;
@@ -165,6 +170,7 @@ impl<'a> ModelState<'a> {
             self.memory_manager.log_usage("attn_apply");
             self.unload_layer_weights();
             self.memory_manager.log_usage("attn_unload");
+            display::progress_step();
 
             self.load_layer_weights(layer_idx * 2 + 2)?;
             self.memory_manager.log_usage("ffn_load");
@@ -172,6 +178,7 @@ impl<'a> ModelState<'a> {
             self.memory_manager.log_usage("ffn_apply");
             self.unload_layer_weights();
             self.memory_manager.log_usage("ffn_unload");
+            display::progress_step();
         }
 
         self.load_layer_weights(NUM_LAYERS * 2 + 1)?;
@@ -179,6 +186,8 @@ impl<'a> ModelState<'a> {
         let output_tokens = self.generate_output()?;
         self.unload_layer_weights();
         self.memory_manager.log_usage("out_unload");
+        display::progress_step();
+        display::progress_end();
         Ok(output_tokens)
     }
     

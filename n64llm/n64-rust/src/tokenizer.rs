@@ -31,7 +31,7 @@ impl<'a> Tokenizer<'a> {
     }
     
     // Load basic vocabulary from ROM
-    fn load_basic_vocab(&mut self) -> bool {
+    pub fn load_basic_vocab(&mut self) -> bool {
         if self.vocab_loaded {
             return true;
         }
