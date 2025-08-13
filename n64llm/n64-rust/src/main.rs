@@ -5,8 +5,10 @@ extern crate alloc;
 mod model_weights;
 mod n64_math;
 mod n64_sys;
+mod ipl3;
 
 use alloc::string::String;
+use alloc::vec::Vec;
 use core::panic::PanicInfo;
 use alloc::format;
 
@@ -28,56 +30,55 @@ pub extern "C" fn main() -> ! {
     display::print_line("Memory manager initialized");
     memory.log_usage("init");
 
-    // Main interactive loop.
-    display::print_line("\nEnter text with the controller:");
+    // Main interactive loop with on-screen keyboard.
     let mut input_buffer = String::new();
+    let mut history: Vec<String> = Vec::new();
+    display::print_line("\nUse the on-screen keyboard. Start to submit.");
 
     loop {
-        if let Some(input) = display::read_input() {
-            input_buffer.push_str(&input);
-            display::print_line(&format!("Input: {}", input_buffer));
+        if display::keyboard_input(&mut input_buffer) {
+            history.push(format!("[You] {}", input_buffer));
+            display::print_line("Working...");
 
-            // Check for newline, which signals the end of the input.
-            if input == "\n" {
-                display::print_line("Processing (this will take a while)...");
+            let output_text = {
+                let mut tokenizer = tokenizer::Tokenizer::new(&mut memory);
+                let input_tokens = tokenizer.encode(&input_buffer);
 
-                // Use a scoped block to create a tokenizer and engine so that their mutable borrows
-                // of `memory` are dropped after processing.
-                let output_text = {
-                    // Create a tokenizer to encode the input.
-                    let mut tokenizer = tokenizer::Tokenizer::new(&mut memory);
-                    let input_tokens = tokenizer.encode(&input_buffer);
-
-                    // Create an inference engine instance to run inference.
-                    let output_tokens = match {
-                        let mut engine = inference_engine::ModelState::new(&mut memory);
-                        engine.run_inference(&input_tokens)
-                    } {
-                        Ok(tokens) => tokens,
-                        Err(e) => {
-                            display::print_line(&format!("Error: {:?}", e));
-                            // On error, clear the input and continue.
-                            input_buffer.clear();
-                            display::print_line("\nEnter next input:");
-                            continue;
-                        }
-                    };
-
-                    // Create a new tokenizer instance to decode the output tokens.
-                    let mut tokenizer = tokenizer::Tokenizer::new(&mut memory);
-                    tokenizer.decode(&output_tokens)
+                let output_tokens = match {
+                    let mut engine = inference_engine::ModelState::new(&mut memory);
+                    engine.run_inference(&input_tokens)
+                } {
+                    Ok(tokens) => tokens,
+                    Err(e) => {
+                        display::print_line(&format!("Error: {:?}", e));
+                        input_buffer.clear();
+                        continue;
+                    }
                 };
-                memory.log_usage("post_infer");
 
-                display::print_line(&format!("Output: {}", output_text));
+                let mut tokenizer = tokenizer::Tokenizer::new(&mut memory);
+                tokenizer.decode(&output_tokens)
+            };
+            memory.log_usage("post_infer");
 
-                // Clear the input buffer for the next input.
-                input_buffer.clear();
-                display::print_line("\nEnter next input:");
+            history.push(format!("[AI] {}", output_text));
+            // Limit history to a few KB to stay within memory limits.
+            let mut total: usize = history.iter().map(|s| s.len()).sum();
+            while total > 4096 {
+                if let Some(first) = history.first() {
+                    total -= first.len();
+                }
+                history.remove(0);
             }
-        } else {
-            delay(1000);
+
+            display::clear();
+            for line in &history {
+                display::print_line(line);
+            }
+            input_buffer.clear();
         }
+
+        delay(1000);
     }
 }
 

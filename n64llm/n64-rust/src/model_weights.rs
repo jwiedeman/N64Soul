@@ -5,4 +5,5 @@
 /// this data into the `.model_weights` section, which should be mapped to the desired
 /// ROM address in your linker script (e.g. 0x10000000).
 #[link_section = ".model_weights"]
+#[used]
 pub static MODEL_WEIGHTS: &[u8] = include_bytes!("n64_model_weights_reduced.bin");

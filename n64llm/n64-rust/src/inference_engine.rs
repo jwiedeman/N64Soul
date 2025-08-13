@@ -2,6 +2,7 @@ use alloc::vec::Vec;
 use core::result::Result;
 use core::fmt;
 use crate::memory_manager::MemoryManager;
+use crate::display;
 use crate::n64_sys::{PI_STATUS_REG, PI_STATUS_IO_BUSY, PI_STATUS_DMA_BUSY, pi_read};
 use alloc::vec;
 use crate::n64_math;
@@ -151,6 +152,7 @@ impl<'a> ModelState<'a> {
     }
     
     pub fn run_inference(&mut self, input_tokens: &[u32]) -> Result<Vec<u32>, Error> {
+        display::show_progress(0, NUM_LAYERS + 1);
         self.load_layer_weights(0)?;
         self.memory_manager.log_usage("embed_load");
         self.apply_embeddings(input_tokens)?;
@@ -172,6 +174,8 @@ impl<'a> ModelState<'a> {
             self.memory_manager.log_usage("ffn_apply");
             self.unload_layer_weights();
             self.memory_manager.log_usage("ffn_unload");
+
+            display::show_progress(layer_idx + 1, NUM_LAYERS + 1);
         }
 
         self.load_layer_weights(NUM_LAYERS * 2 + 1)?;
@@ -179,6 +183,7 @@ impl<'a> ModelState<'a> {
         let output_tokens = self.generate_output()?;
         self.unload_layer_weights();
         self.memory_manager.log_usage("out_unload");
+        display::show_progress(NUM_LAYERS + 1, NUM_LAYERS + 1);
         Ok(output_tokens)
     }
     
