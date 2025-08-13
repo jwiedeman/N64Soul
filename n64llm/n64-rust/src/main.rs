@@ -19,6 +19,7 @@ mod inference_engine;
 mod io;
 mod memory_manager;
 mod tokenizer;
+mod manifest;
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
@@ -40,6 +41,9 @@ pub extern "C" fn main() -> ! {
         true
     });
 
+    let manifest = manifest::load();
+    display::print_line(&format!("Manifest layers: {}", manifest.layers.len()));
+
     // Initialize memory management system.
     let mut memory = unsafe { memory_manager::init() };
     display::print_line("Memory manager initialized");
@@ -60,7 +64,7 @@ pub extern "C" fn main() -> ! {
                 let input_tokens = tokenizer.encode(&input_buffer);
 
                 let output_tokens = match {
-                    let mut engine = inference_engine::ModelState::new(&mut memory);
+                    let mut engine = inference_engine::ModelState::new(&mut memory, &manifest);
                     engine.run_inference(&input_tokens)
                 } {
                     Ok(tokens) => tokens,

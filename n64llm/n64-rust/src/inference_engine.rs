@@ -4,6 +4,7 @@ use core::fmt;
 use crate::memory_manager::MemoryManager;
 use crate::display;
 use crate::n64_sys::{PI_STATUS_REG, PI_STATUS_IO_BUSY, PI_STATUS_DMA_BUSY, pi_read};
+use crate::manifest;
 use alloc::vec;
 use crate::n64_math;
 
@@ -30,53 +31,17 @@ const HIDDEN_SIZE: usize = 384; // Reduced for memory constraints
 const VOCAB_SIZE: usize = 25000; // Approximate for GPT-2 
 const MAX_SEQ_LENGTH: usize = 128; // Reduced max sequence length
 
-// Offsets and sizes (in bytes) of each weight segment in ROM.
-// These must match the layout produced by your export script.
-const LAYER_OFFSETS: [u32; 14] = [
-    0x00000000, // Embedding layer
-    0x00100000, // Layer 0 Attention
-    0x00200000, // Layer 0 FFN
-    0x00300000, // Layer 1 Attention
-    0x00400000, // Layer 1 FFN
-    0x00500000, // Layer 2 Attention
-    0x00600000, // Layer 2 FFN
-    0x00700000, // Layer 3 Attention
-    0x00800000, // Layer 3 FFN
-    0x00900000, // Layer 4 Attention
-    0x00A00000, // Layer 4 FFN
-    0x00B00000, // Layer 5 Attention
-    0x00C00000, // Layer 5 FFN
-    0x00D00000, // Output layer
-];
-
-// Layer sizes in bytes (approximate, should match export script)
-const LAYER_SIZES: [usize; 14] = [
-    1024 * 1024,  // 1MB for embedding
-    1024 * 1024,  // 1MB per attention layer
-    1024 * 1024,  // 1MB per FFN
-    1024 * 1024,
-    1024 * 1024,
-    1024 * 1024,
-    1024 * 1024,
-    1024 * 1024,
-    1024 * 1024,
-    1024 * 1024,
-    1024 * 1024,
-    1024 * 1024,
-    1024 * 1024,
-    1024 * 1024,  // 1MB for output layer
-];
-
 pub struct ModelState<'a> {
     current_layer_weights: Vec<f32>,
     layer_index: usize,
     hidden_states: Vec<f32>,
     memory_manager: &'a mut MemoryManager,
     last_checkpoint: Option<usize>,
+    manifest: &'a manifest::Manifest,
 }
 
 impl<'a> ModelState<'a> {
-    pub fn new(memory_manager: &'a mut MemoryManager) -> Self {
+    pub fn new(memory_manager: &'a mut MemoryManager, manifest: &'a manifest::Manifest) -> Self {
         let hidden_states = Vec::with_capacity(MAX_SEQ_LENGTH * HIDDEN_SIZE);
         ModelState {
             current_layer_weights: Vec::new(),
@@ -84,11 +49,12 @@ impl<'a> ModelState<'a> {
             hidden_states,
             memory_manager,
             last_checkpoint: None,
+            manifest,
         }
     }
-    
+
     pub fn load_layer_weights(&mut self, layer_idx: usize) -> Result<(), Error> {
-        if layer_idx >= LAYER_OFFSETS.len() {
+        if layer_idx >= self.manifest.layers.len() {
             return Err(Error::MemoryError);
         }
 
@@ -96,13 +62,14 @@ impl<'a> ModelState<'a> {
         let cp = self.memory_manager.checkpoint();
         self.last_checkpoint = Some(cp);
 
-        let offset = LAYER_OFFSETS[layer_idx];
-        let size = LAYER_SIZES[layer_idx];
+        let layer = &self.manifest.layers[layer_idx];
+        let offset = layer.offset;
+        let size = layer.size as usize;
 
         self.current_layer_weights = Vec::with_capacity(size / 4); // 4 bytes per f32
-        
+
         self.read_from_rom(offset, size)?;
-        
+
         self.layer_index = layer_idx;
         Ok(())
     }
@@ -359,19 +326,22 @@ extern crate std;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::string::String;
 
     #[test]
     fn load_layer_out_of_bounds() {
         let mut mm = MemoryManager::new();
-        let mut state = ModelState::new(&mut mm);
-        let res = state.load_layer_weights(LAYER_OFFSETS.len());
+        let manifest = manifest::Manifest { layers: vec![] };
+        let mut state = ModelState::new(&mut mm, &manifest);
+        let res = state.load_layer_weights(0);
         assert!(matches!(res, Err(Error::MemoryError)));
     }
 
     #[test]
     fn apply_embeddings_invalid_token() {
         let mut mm = MemoryManager::new();
-        let mut state = ModelState::new(&mut mm);
+        let manifest = manifest::Manifest { layers: vec![manifest::Layer { name: String::new(), offset: 0, size: (HIDDEN_SIZE * 4) as u32 }] };
+        let mut state = ModelState::new(&mut mm, &manifest);
         state.current_layer_weights = vec![0.0; HIDDEN_SIZE];
         let res = state.apply_embeddings(&[VOCAB_SIZE as u32]);
         assert!(matches!(res, Err(Error::ComputationError)));
@@ -380,7 +350,8 @@ mod tests {
     #[test]
     fn generate_output_empty_state() {
         let mut mm = MemoryManager::new();
-        let state = ModelState::new(&mut mm);
+        let manifest = manifest::Manifest { layers: vec![] };
+        let state = ModelState::new(&mut mm, &manifest);
         let res = state.generate_output();
         assert!(matches!(res, Err(Error::ComputationError)));
     }
