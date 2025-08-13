@@ -20,6 +20,7 @@ mod io;
 mod memory_manager;
 mod tokenizer;
 mod manifest;
+mod model;
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
