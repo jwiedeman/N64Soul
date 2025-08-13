@@ -3,6 +3,7 @@
 
 use alloc::string::String;
 use alloc::format;
+use core::fmt::Write;
 use crate::n64_sys;
 
 // N64 display buffer address (adjust for real hardware)
@@ -426,6 +427,15 @@ pub fn show_progress(current: usize, total: usize) {
         }
     }
     print_line(&format!("Working... [{}] {}/{}", bar, current, total));
+}
+
+pub fn log_probe(offset: u64, ok: bool, first_bytes: &[u8]) {
+    let mut hex = String::new();
+    for &b in first_bytes {
+        let _ = write!(hex, "{:02X}", b);
+    }
+    let status = if ok { "OK" } else { "X" };
+    print_line(&format!("probe 0x{:08X}: {} {}", offset, hex, status));
 }
 
 // Scroll the display up by one character row
