@@ -7,6 +7,7 @@ mod ipl3;
 mod model_weights;
 mod n64_math;
 mod n64_sys;
+mod platform;
 
 use alloc::format;
 use alloc::string::String;
@@ -31,22 +32,13 @@ pub extern "C" fn main() -> ! {
     display::print_line("Initializing...");
 
     display::print_line("Probing ROM...");
-    diag::rom_probe::rom_probe(|off, buf| {
-        unsafe {
-            n64_sys::pi_read(
-                buf.as_mut_ptr(),
-                (n64_sys::CART_ROM_BASE as u32).wrapping_add(off as u32),
-                buf.len() as u32,
-            );
-        }
-        true
-    });
+    let mut rr = io::rom_reader::FlatRomReader::new();
+    diag::rom_probe::run_probe(&mut rr);
 
     let manifest = manifest::load();
     display::print_line(&format!("Manifest layers: {}", manifest.layers.len()));
 
     display::print_line("Running ROM checksum...");
-    let mut rr = io::rom_reader::FlatRomReader;
     match model::stream::checksum_all_layers(&mut rr, &manifest) {
         Some(sum) => display::print_line(&format!("Checksum: 0x{:08X}", sum)),
         None => display::print_line("Checksum failed"),

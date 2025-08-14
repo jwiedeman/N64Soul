@@ -429,13 +429,18 @@ pub fn show_progress(current: usize, total: usize) {
     print_line(&format!("Working... [{}] {}/{}", bar, current, total));
 }
 
-pub fn log_probe(offset: u64, ok: bool, first_bytes: &[u8]) {
-    let mut hex = String::new();
-    for &b in first_bytes {
-        let _ = write!(hex, "{:02X}", b);
+pub fn print_probe_result(off: u64, ok: bool, bytes: &[u8]) {
+    // Example: "0x18000000  OK  12 34 56 78 9A BC DE F0"
+    use core::fmt::Write;
+    let mut buf = heapless::String::<96>::new();
+    let _ = write!(
+        &mut buf, "0x{off:08X}  {}  ",
+        if ok { "OK " } else { "ERR" }
+    );
+    for b in bytes.iter().take(8) {
+        let _ = write!(&mut buf, "{:02X} ", b);
     }
-    let status = if ok { "OK" } else { "X" };
-    print_line(&format!("probe 0x{:08X}: {} {}", offset, hex, status));
+    print_line(buf.as_str());
 }
 
 // Scroll the display up by one character row

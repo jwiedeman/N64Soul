@@ -26,6 +26,9 @@ opt-level = 3
 lto = true
 codegen-units = 1
 
+[dependencies]
+heapless = { version = "0.7", default-features = false }
+
 [[bin]]
 name = "n64_gpt"
 path = "src/main.rs"
