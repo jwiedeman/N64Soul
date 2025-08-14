@@ -1,25 +1,15 @@
 pub struct Dbuf<const N: usize> {
-    a: [u8; N],
-    b: [u8; N],
-    use_a: bool,
+    cur: [u8; N],
+    nxt: [u8; N],
 }
 
 impl<const N: usize> Dbuf<N> {
-    pub const fn new() -> Self {
-        Self {
-            a: [0; N],
-            b: [0; N],
-            use_a: true,
-        }
-    }
-
-    pub fn pair(&mut self) -> (&mut [u8; N], &mut [u8; N]) {
-        if self.use_a {
-            self.use_a = false;
-            (&mut self.a, &mut self.b)
-        } else {
-            self.use_a = true;
-            (&mut self.b, &mut self.a)
-        }
-    }
+    pub const fn new() -> Self { Self { cur: [0; N], nxt: [0; N] } }
+    #[inline(always)]
+    pub fn cur_mut(&mut self) -> &mut [u8; N] { &mut self.cur }
+    #[inline(always)]
+    pub fn nxt_mut(&mut self) -> &mut [u8; N] { &mut self.nxt }
+    #[inline(always)]
+    pub fn swap(&mut self) { core::mem::swap(&mut self.cur, &mut self.nxt); }
 }
+

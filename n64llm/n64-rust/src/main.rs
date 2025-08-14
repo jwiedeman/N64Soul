@@ -23,6 +23,8 @@ mod manifest;
 mod memory_manager;
 mod model;
 mod tokenizer;
+mod util;
+mod stream;
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
@@ -42,6 +44,9 @@ pub extern "C" fn main() -> ! {
         &weights_manifest::MODEL_MANIFEST,
         weights::weights_rom_size(),
     );
+
+    diag::stream_bench::run(&mut rr, &crate::weights_manifest::MODEL_MANIFEST);
+    wait_for_start_button();
 
     let manifest = manifest::load();
     display::print_line(&format!("Manifest layers: {}", manifest.layers.len()));
@@ -107,6 +112,10 @@ pub extern "C" fn main() -> ! {
 
         delay(1000);
     }
+}
+
+fn wait_for_start_button() {
+    // Controller polling not implemented; placeholder for hardware pause.
 }
 
 fn delay(ms: u32) {
