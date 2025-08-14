@@ -45,6 +45,13 @@ pub extern "C" fn main() -> ! {
     let manifest = manifest::load();
     display::print_line(&format!("Manifest layers: {}", manifest.layers.len()));
 
+    display::print_line("Running ROM checksum...");
+    let mut rr = io::rom_reader::FlatRomReader;
+    match model::stream::checksum_all_layers(&mut rr, &manifest) {
+        Some(sum) => display::print_line(&format!("Checksum: 0x{:08X}", sum)),
+        None => display::print_line("Checksum failed"),
+    }
+
     // Initialize memory management system.
     let mut memory = unsafe { memory_manager::init() };
     display::print_line("Memory manager initialized");
