@@ -36,6 +36,13 @@ SECTIONS
     } > ROM
     __model_weights_rom_end = .;
     __model_weights_rom_size = __model_weights_rom_end - __model_weights_rom_start;
+    /* Start marker for manifest */
+    __model_manifest_rom_start = .;
+    .model_manifest ALIGN(64) :
+    {
+      KEEP(*(.model_manifest*))
+    } > ROM
+    __model_manifest_rom_end = .;
 
     /* .data: Initialized mutable data goes into RDRAM */
     .data : ALIGN(4)
