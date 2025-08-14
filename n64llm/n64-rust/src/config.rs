@@ -1,7 +1,8 @@
 #![allow(dead_code)]
 
-pub const BURST_BYTES: usize = 32 * 1024; // Try 16K, 32K, 64K
+pub const BURST_BYTES: usize = 32 * 1024; // Try 16K/32K/64K later
 pub const ROM_ALIGN: usize = 64;          // Exporter enforces; reader asserts
+pub const BENCH_MAX_BYTES_PER_ENTRY: u32 = 4 * 1024 * 1024; // cap per entry for quick bench
 pub const PROBE_OFFSETS: &[u64] = &[
     16 * 1024 * 1024,    // 16 MiB
     128 * 1024 * 1024,   // 128 MiB

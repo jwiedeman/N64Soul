@@ -30,29 +30,27 @@ where
 
     const BURST: usize = config::BURST_BYTES;
     let mut dbuf: Dbuf<BURST> = Dbuf::new();
-    let (mut cur, mut nxt) = dbuf.pair();
 
-    let first = core::cmp::min(remain as usize, BURST);
-    if !rr.read(off, &mut cur[..first]) {
+    let mut first = core::cmp::min(remain as usize, BURST);
+    if !rr.read(off, &mut dbuf.cur_mut()[..first]) {
         return false;
     }
     off += first as u64;
     remain -= first as u64;
-    let mut cur_len = first;
 
     while remain > 0 {
         let to_read = core::cmp::min(remain as usize, BURST);
-        if !rr.read(off, &mut nxt[..to_read]) {
+        if !rr.read(off, &mut dbuf.nxt_mut()[..to_read]) {
             return false;
         }
-        on_chunk(&cur[..cur_len]);
-        core::mem::swap(&mut cur, &mut nxt);
-        cur_len = to_read;
+        on_chunk(&dbuf.cur_mut()[..first]);
+        dbuf.swap();
+        first = to_read;
         off += to_read as u64;
         remain -= to_read as u64;
     }
 
-    on_chunk(&cur[..cur_len]);
+    on_chunk(&dbuf.cur_mut()[..first]);
     true
 }
 
