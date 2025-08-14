@@ -9,6 +9,7 @@ mod n64_sys;
 mod platform;
 mod weights;
 mod weights_manifest;
+mod weights_manifest_find;
 
 use alloc::format;
 use alloc::string::String;
@@ -24,6 +25,7 @@ mod memory_manager;
 mod model;
 mod tokenizer;
 mod util;
+mod infer;
 mod stream;
 
 #[no_mangle]
@@ -46,6 +48,7 @@ pub extern "C" fn main() -> ! {
     );
 
     diag::stream_bench::run(&mut rr, &crate::weights_manifest::MODEL_MANIFEST);
+    diag::decode_once::run(&mut rr, &crate::weights_manifest::MODEL_MANIFEST, 42);
     wait_for_start_button();
 
     let manifest = manifest::load();
