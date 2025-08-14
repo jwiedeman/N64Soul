@@ -55,3 +55,20 @@ where
     on_chunk(&cur[..cur_len]);
     true
 }
+
+/// Streams all layers listed in `manifest` and computes a simple rolling
+/// checksum. Returns `Some(crc)` on success or `None` if any read fails.
+pub fn checksum_all_layers<R: RomReader>(rr: &mut R, manifest: &Manifest) -> Option<u32> {
+    let mut crc: u32 = 0;
+    for idx in 0..manifest.layers.len() {
+        let ok = stream_layer(rr, manifest, idx, |chunk| {
+            for &b in chunk {
+                crc = crc.rotate_left(5) ^ b as u32;
+            }
+        });
+        if !ok {
+            return None;
+        }
+    }
+    Some(crc)
+}
