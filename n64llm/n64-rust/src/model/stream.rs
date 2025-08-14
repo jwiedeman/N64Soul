@@ -2,7 +2,7 @@ use crate::{
     config,
     io::{dbuf::Dbuf, rom_reader::RomReader},
     manifest::Manifest,
-    model_weights::{weights_rom_base, weights_rom_size},
+    weights::{weights_rom_base, weights_rom_size},
 };
 
 /// Streams a model layer from ROM using a [`RomReader`] and double buffering.

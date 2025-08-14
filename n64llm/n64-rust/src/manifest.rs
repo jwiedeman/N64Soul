@@ -1,5 +1,5 @@
+use crate::{config, weights};
 use alloc::{string::String, vec::Vec};
-use crate::{config, model_weights};
 
 #[derive(Debug, Clone)]
 pub struct Layer {
@@ -36,11 +36,7 @@ fn parse(json: &str) -> Manifest {
                 let mut size = 0u32;
                 for field in obj.split(',') {
                     let mut parts = field.splitn(2, ':');
-                    let key = parts
-                        .next()
-                        .unwrap_or("")
-                        .trim()
-                        .trim_matches(|c| c == '"');
+                    let key = parts.next().unwrap_or("").trim().trim_matches(|c| c == '"');
                     let value = parts.next().unwrap_or("").trim();
                     match key {
                         "name" => {
@@ -76,7 +72,7 @@ fn validate(m: &Manifest) -> bool {
             return false;
         }
         let end = layer.offset + layer.size;
-        if end as usize > model_weights::weights_rom_size() {
+        if end as usize > weights::weights_rom_size() {
             return false;
         }
         last_end = end;

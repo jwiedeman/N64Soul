@@ -4,10 +4,10 @@
 extern crate alloc;
 mod config;
 mod ipl3;
-mod model_weights;
 mod n64_math;
 mod n64_sys;
 mod platform;
+mod weights;
 
 use alloc::format;
 use alloc::string::String;
@@ -18,10 +18,10 @@ mod diag;
 mod display;
 mod inference_engine;
 mod io;
-mod memory_manager;
-mod tokenizer;
 mod manifest;
+mod memory_manager;
 mod model;
+mod tokenizer;
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
@@ -34,6 +34,7 @@ pub extern "C" fn main() -> ! {
     display::print_line("Probing ROM...");
     let mut rr = io::rom_reader::FlatRomReader::new();
     diag::rom_probe::run_probe(&mut rr);
+    diag::weights_info::show_weights_info(&mut rr);
 
     let manifest = manifest::load();
     display::print_line(&format!("Manifest layers: {}", manifest.layers.len()));

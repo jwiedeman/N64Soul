@@ -35,6 +35,7 @@ SECTIONS
          KEEP(*(.model_weights*))
     } > ROM
     __model_weights_rom_end = .;
+    __model_weights_rom_size = __model_weights_rom_end - __model_weights_rom_start;
 
     /* .data: Initialized mutable data goes into RDRAM */
     .data : ALIGN(4)
