@@ -1,58 +1,54 @@
-#!/usr/bin/env python3
-"""Validate a weights.bin file against its manifest."""
-
-import argparse
-import json
-from pathlib import Path
+import argparse, os, struct, sys
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Validate weights manifest")
-    default_dir = Path(__file__).resolve().parent.parent / "n64llm" / "assets"
-    parser.add_argument("--weights", type=Path, default=default_dir / "weights.bin")
-    parser.add_argument(
-        "--manifest", type=Path, default=default_dir / "weights.manifest.json"
-    )
-    args = parser.parse_args()
+def read_exact(f, n):
+    b = f.read(n)
+    if len(b) != n:
+        raise EOFError
+    return b
 
-    if not args.weights.exists():
-        print(f"missing weights file: {args.weights}")
-        return 1
-    if not args.manifest.exists():
-        print(f"missing manifest: {args.manifest}")
-        return 1
+def parse_manifest(path):
+    with open(path, "rb") as f:
+        magic = read_exact(f, 4)
+        if magic != b"N64W":
+            raise SystemExit("Bad magic")
+        ver, align = struct.unpack("<HH", read_exact(f, 4))
+        if ver != 1:
+            raise SystemExit(f"Bad version: {ver}")
+        count, = struct.unpack("<I", read_exact(f, 4))
+        entries = []
+        for _ in range(count):
+            nlen, = struct.unpack("<H", read_exact(f, 2))
+            name = read_exact(f, nlen).decode("utf-8", "replace")
+            off, size = struct.unpack("<II", read_exact(f, 8))
+            entries.append((name, off, size))
+        return align, entries
 
-    data = json.loads(args.manifest.read_text())
-    align = data.get("align", 64)
-    layers = data.get("layers", [])
-    file_size = args.weights.stat().st_size
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--bin", required=True)
+    ap.add_argument("--man", required=True)
+    args = ap.parse_args()
 
-    last_end = 0
-    total = 0
-    for layer in layers:
-        name = layer["name"]
-        off = layer["offset"]
-        size = layer["size"]
+    size = os.path.getsize(args.bin)
+    align, entries = parse_manifest(args.man)
+
+    used = []
+    for name, off, sz in entries:
         if off % align != 0:
-            print(f"layer {name} offset {off} not aligned to {align}")
-            return 1
-        if off < last_end:
-            print(f"layer {name} overlaps previous segment")
-            return 1
-        end = off + size
-        if end > file_size:
-            print(f"layer {name} exceeds file size")
-            return 1
-        last_end = end
-        total += size
+            print(f"[FAIL] {name}: offset {off} not aligned to {align}")
+            sys.exit(2)
+        if off + sz > size:
+            print(f"[FAIL] {name}: out of bounds ({off}+{sz}>{size})")
+            sys.exit(2)
+        used.append((off, off + sz, name))
+    used.sort()
+    for (s1, e1, n1), (s2, e2, n2) in zip(used, used[1:]):
+        if s2 < e1:
+            print(f"[FAIL] overlap: {n1} [{s1},{e1}) with {n2} [{s2},{e2})")
+            sys.exit(2)
 
-    if total != file_size:
-        print(f"sum of layer sizes {total} != file size {file_size}")
-        return 1
-
-    print("weights and manifest validated")
-    return 0
-
+    print(f"[OK] {len(entries)} entries; bin={size} bytes; align={align}")
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

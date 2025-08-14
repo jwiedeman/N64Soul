@@ -8,6 +8,7 @@ mod n64_math;
 mod n64_sys;
 mod platform;
 mod weights;
+mod weights_manifest;
 
 use alloc::format;
 use alloc::string::String;
@@ -35,6 +36,12 @@ pub extern "C" fn main() -> ! {
     let mut rr = io::rom_reader::FlatRomReader::new();
     diag::rom_probe::run_probe(&mut rr);
     diag::weights_info::show_weights_info(&mut rr);
+
+    diag::manifest_check::manifest_check(
+        &mut rr,
+        &weights_manifest::MODEL_MANIFEST,
+        weights::weights_rom_size(),
+    );
 
     let manifest = manifest::load();
     display::print_line(&format!("Manifest layers: {}", manifest.layers.len()));

@@ -1,69 +1,60 @@
-#!/usr/bin/env python3
-"""Export model weights to a contiguous blob with manifest.
-
-Usage:
-    python export_model.py name1=path1 name2=path2 ...
-Each argument specifies a layer name and the path to its raw weights.
-The script concatenates the files into `weights.bin` with 64-byte alignment
-and writes `weights.manifest.json` describing the layout.
-"""
-
-from __future__ import annotations
-
-import argparse
-import json
-from pathlib import Path
+import argparse, json, os, struct, sys
 
 ALIGN = 64
 
+def pad_to(f, align=ALIGN):
+    pos = f.tell()
+    need = (-pos) % align
+    if need:
+        f.write(b"\x00" * need)
+    return need
 
-def pad_size(size: int, align: int = ALIGN) -> int:
-    return (size + align - 1) // align * align
+def collect_entries(args):
+    entries = []
+    if args.spec:
+        spec = json.load(open(args.spec, "r"))
+        for item in spec["layers"]:
+            entries.append((item["name"], item["path"]))
+    else:
+        for pair in args.pairs:
+            if "=" not in pair:
+                raise SystemExit(f"Bad pair: {pair}")
+            name, path = pair.split("=", 1)
+            entries.append((name, path))
+    return entries
 
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--spec", help="JSON spec with {'layers':[{'name','path'},...]}")
+    ap.add_argument("pairs", nargs="*", help="name=path entries if no --spec")
+    ap.add_argument("--out-bin", required=True)
+    ap.add_argument("--out-man", required=True)
+    args = ap.parse_args()
 
-def write_aligned(f, data: bytes) -> tuple[int, int]:
-    offset = f.tell()
-    pad = (-offset) % ALIGN
-    if pad:
-        f.write(b"\0" * pad)
-        offset += pad
-    padded = pad_size(len(data))
-    f.write(data)
-    if padded > len(data):
-        f.write(b"\0" * (padded - len(data)))
-    return offset, padded
+    entries = collect_entries(args)
+    os.makedirs(os.path.dirname(args.out_bin), exist_ok=True)
 
+    manifest_recs = []
+    with open(args.out_bin, "wb") as bout:
+        for name, path in entries:
+            pad_to(bout, ALIGN)
+            off = bout.tell()
+            with open(path, "rb") as fin:
+                data = fin.read()
+            bout.write(data)
+            manifest_recs.append((name, off, len(data)))
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Create weights.bin and manifest")
-    parser.add_argument("segments", nargs="+", help="Layer segments in name=path form")
-    parser.add_argument(
-        "--outdir",
-        default=Path(__file__).resolve().parent.parent / "n64llm" / "assets",
-        type=Path,
-        help="Output directory for weights.bin and manifest",
-    )
-    args = parser.parse_args()
-
-    outdir: Path = args.outdir
-    outdir.mkdir(parents=True, exist_ok=True)
-    weights_path = outdir / "weights.bin"
-    manifest_path = outdir / "weights.manifest.json"
-
-    layers = []
-    with weights_path.open("wb") as wf:
-        for spec in args.segments:
-            if "=" not in spec:
-                raise SystemExit(f"Invalid segment spec '{spec}', expected name=path")
-            name, path = spec.split("=", 1)
-            data = Path(path).read_bytes()
-            offset, size = write_aligned(wf, data)
-            layers.append({"name": name, "offset": offset, "size": size})
-    manifest = {"version": 1, "align": ALIGN, "layers": layers}
-    manifest_path.write_text(json.dumps(manifest, indent=2))
-    print(f"wrote {weights_path} ({weights_path.stat().st_size} bytes)")
-    print(f"wrote {manifest_path}")
-
+    with open(args.out_man, "wb") as mout:
+        mout.write(b"N64W")
+        mout.write(struct.pack("<H", 1))
+        mout.write(struct.pack("<H", ALIGN))
+        mout.write(struct.pack("<I", len(entries)))
+        for name, off, size in manifest_recs:
+            nb = name.encode("utf-8")
+            mout.write(struct.pack("<H", len(nb)))
+            mout.write(nb)
+            mout.write(struct.pack("<I", off))
+            mout.write(struct.pack("<I", size))
 
 if __name__ == "__main__":
     main()

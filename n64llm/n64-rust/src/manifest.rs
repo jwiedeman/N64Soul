@@ -1,4 +1,4 @@
-use crate::{config, weights};
+use crate::{weights, weights_manifest::{self, ManifestView}};
 use alloc::{string::String, vec::Vec};
 
 #[derive(Debug, Clone)]
@@ -14,65 +14,35 @@ pub struct Manifest {
 }
 
 pub fn load() -> Manifest {
-    let json = include_str!("../../assets/weights.manifest.json");
-    let manifest = parse(json);
-    if !validate(&manifest) {
+    let view = ManifestView::new(&weights_manifest::MODEL_MANIFEST)
+        .expect("invalid weights manifest");
+    let mut layers = Vec::new();
+    let _ = view.for_each(|e| {
+        layers.push(Layer {
+            name: e.name.to_string(),
+            offset: e.offset,
+            size: e.size,
+        });
+        true
+    });
+    let manifest = Manifest { layers };
+    if !validate(&manifest, view.align() as u32) {
         panic!("invalid weights manifest");
     }
     manifest
 }
 
-fn parse(json: &str) -> Manifest {
-    let mut layers = Vec::new();
-    if let Some(start) = json.find('[') {
-        let mut rest = &json[start + 1..];
-        while let Some(obj_start) = rest.find('{') {
-            rest = &rest[obj_start + 1..];
-            if let Some(obj_end) = rest.find('}') {
-                let obj = &rest[..obj_end];
-                rest = &rest[obj_end + 1..];
-                let mut name = String::new();
-                let mut offset = 0u32;
-                let mut size = 0u32;
-                for field in obj.split(',') {
-                    let mut parts = field.splitn(2, ':');
-                    let key = parts.next().unwrap_or("").trim().trim_matches(|c| c == '"');
-                    let value = parts.next().unwrap_or("").trim();
-                    match key {
-                        "name" => {
-                            name = value.trim_matches('"').to_string();
-                        }
-                        "offset" => {
-                            offset = value.parse().unwrap_or(0);
-                        }
-                        "size" => {
-                            size = value.parse().unwrap_or(0);
-                        }
-                        _ => {}
-                    }
-                }
-                if !name.is_empty() {
-                    layers.push(Layer { name, offset, size });
-                }
-            } else {
-                break;
-            }
-        }
-    }
-    Manifest { layers }
-}
-
-fn validate(m: &Manifest) -> bool {
+fn validate(m: &Manifest, align: u32) -> bool {
     let mut last_end = 0u32;
     for layer in &m.layers {
-        if layer.offset % config::ROM_ALIGN as u32 != 0 {
+        if layer.offset % align != 0 {
             return false;
         }
         if layer.offset < last_end {
             return false;
         }
         let end = layer.offset + layer.size;
-        if end as usize > weights::weights_rom_size() {
+        if end as u64 > weights::weights_rom_size() {
             return false;
         }
         last_end = end;
