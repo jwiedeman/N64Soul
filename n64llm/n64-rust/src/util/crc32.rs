@@ -15,12 +15,14 @@ pub fn crc32_update(mut crc: u32, buf: &[u8]) -> u32 {
 pub fn crc32_finish(crc: u32) -> u32 { !crc }
 
 #[cfg(test)]
-mod tests {
+mod t_crc32 {
     use super::*;
 
     #[test]
-    fn crc32_known_vector() {
-        let crc = crc32_finish(crc32_update(!0, b"123456789"));
-        assert_eq!(crc, 0xCBF4_3926);
+    fn crc32_empty() { assert_eq!(crc32_finish(crc32_update(!0, &[])), 0); }
+    #[test]
+    fn crc32_abc() {
+        let c = crc32_finish(crc32_update(!0, b"123456789"));
+        assert_eq!(c, 0xCBF43926);
     }
 }

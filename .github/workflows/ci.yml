@@ -26,37 +26,28 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y lld
 
-      - name: Debug weights (tiny)
+      - name: Generate debug weights (ephemeral)
         run: |
           python tools/make_debug_weights.py \
             --out-bin n64llm/n64-rust/assets/weights.bin \
             --out-man n64llm/n64-rust/assets/weights.manifest.bin
-          python tools/validate_weights.py --bin n64llm/n64-rust/assets/weights.bin --man n64llm/n64-rust/assets/weights.manifest.bin --crc
+          python tools/validate_weights.py \
+            --bin n64llm/n64-rust/assets/weights.bin \
+            --man n64llm/n64-rust/assets/weights.manifest.bin --crc
 
-      - name: Build ROM (Rust)
+      - name: Host unit tests (asset-free)
+        run: cargo test --lib --verbose
+        working-directory: n64llm/n64-rust
+
+      - name: Build N64 ROM
         run: |
           cargo install cargo-n64
           cd n64llm/n64-rust
           cargo n64 build --release
-        env:
-          RUSTFLAGS: "-C link-arg=-Tn64.ld"
-
-      - name: Unit tests (host)
-        run: cargo test --verbose
-        working-directory: n64llm/n64-rust
-
-      - name: Summarize manifest
-        run: |
-          echo "### Manifest summary" >> $GITHUB_STEP_SUMMARY
-          python - << 'PY'
-import struct, sys
-p="n64llm/n64-rust/assets/weights.manifest.bin"
-b=open(p,"rb").read()
-ver, align, n = struct.unpack("<x4xHHI", b[:12])
-print(f"* version={ver}, align={align}, entries={n}")
-PY          >> $GITHUB_STEP_SUMMARY
+          echo "### ROM output" >> $GITHUB_STEP_SUMMARY
+          find target -type f -name "*.z64" -printf "* %p (%k KiB)\n" >> $GITHUB_STEP_SUMMARY
 
       - name: Scrub ephemerals
         run: |
           rm -f n64llm/n64-rust/assets/weights.bin n64llm/n64-rust/assets/weights.manifest.bin
-          find target -type f \( -name "*.z64" -o -name "*.n64" \) -delete
+          find n64llm/n64-rust/target -type f \( -name "*.z64" -o -name "*.n64" \) -delete

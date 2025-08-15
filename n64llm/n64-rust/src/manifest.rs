@@ -1,4 +1,5 @@
 use crate::{weights, weights_manifest::{self, ManifestView}};
+use alloc::string::ToString;
 use alloc::{string::String, vec::Vec};
 
 #[derive(Debug, Clone)]
@@ -14,7 +15,7 @@ pub struct Manifest {
 }
 
 pub fn load() -> Manifest {
-    let view = ManifestView::new(&weights_manifest::MODEL_MANIFEST)
+    let view = weights_manifest::manifest()
         .expect("invalid weights manifest");
     let mut layers = Vec::new();
     let _ = view.for_each(|e| {

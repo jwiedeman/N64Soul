@@ -45,7 +45,7 @@ pub fn pi_dma_read(rom_abs_off: u64, dst: &mut [u8]) -> Result<(), PiError> {
     let mut done = 0usize;
     while done < dst.len() {
         let chunk = core::cmp::min(dst.len() - done, BURST_BYTES);
-        let rom_addr = (CART_ROM_BASE + rom_abs_off + done as u64) as u32;
+        let rom_addr = (CART_ROM_BASE as u64 + rom_abs_off + done as u64) as u32;
         unsafe {
             pi_dma_start(dst.as_mut_ptr().add(done), rom_addr, chunk as u32);
             pi_dma_wait_idle();
