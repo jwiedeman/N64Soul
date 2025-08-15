@@ -5,13 +5,11 @@ ENTRY(_start)
 
 MEMORY
 {
-    /* ROM region: This is where your code, constants, and model weights reside.
-       Adjust LENGTH to match your cartridge size. Here we assume ~480 MB. */
-    ROM (rx)  : ORIGIN = 0x10000000, LENGTH = 480M
+    /* ROM region: model and code stored on cart */
+    ROM (rx)  : ORIGIN = 0x10000000, LENGTH = 1024M
 
-    /* RDRAM region: Base N64 has 4 MB of RAM.
-       All writable data (.data, .bss, heap, stack) live here. */
-    RDRAM (rwx) : ORIGIN = 0x80000000, LENGTH = 4M
+    /* RDRAM region: allow for expansion pak */
+    RDRAM (rwx) : ORIGIN = 0x80000000, LENGTH = 8M
 }
 
 SECTIONS
@@ -28,21 +26,20 @@ SECTIONS
         *(.rodata*)
     } > ROM
 
-    /* .model_weights: Dedicated section for model weights. */
-    __model_weights_rom_start = .;
-    .model_weights ALIGN(64) :
-    {
-         KEEP(*(.model_weights*))
-    } > ROM
-    __model_weights_rom_end = .;
-    __model_weights_rom_size = __model_weights_rom_end - __model_weights_rom_start;
-    /* Start marker for manifest */
-    __model_manifest_rom_start = .;
+    /* Manifest and weights sections */
+    __manifest_rom_start = .;
     .model_manifest ALIGN(64) :
     {
       KEEP(*(.model_manifest*))
     } > ROM
-    __model_manifest_rom_end = .;
+    __manifest_rom_end = .;
+
+    __weights_rom_start = .;
+    .model_weights ALIGN(64) :
+    {
+         KEEP(*(.model_weights*))
+    } > ROM
+    __weights_rom_end = .;
 
     /* .data: Initialized mutable data goes into RDRAM */
     .data : ALIGN(4)

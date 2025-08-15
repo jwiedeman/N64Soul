@@ -4,7 +4,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 use crate::memory_manager::MemoryManager;
-use crate::n64_sys;
+use crate::platform::pi;
 
 // Constants for tokenizer
 const VOCAB_SIZE: usize = 25000;
@@ -45,11 +45,10 @@ impl<'a> Tokenizer<'a> {
         
         // Read from ROM
         unsafe {
-            n64_sys::pi_read(
-                buffer_ptr,
-                VOCAB_TABLE_OFFSET,
-                buffer_size as u32
-            );
+            let buf = core::slice::from_raw_parts_mut(buffer_ptr, buffer_size);
+            if pi::pi_dma_read(VOCAB_TABLE_OFFSET as u64, buf).is_err() {
+                return false;
+            }
             
             // Process the loaded data
             let mut offset = 0;
