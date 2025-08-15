@@ -41,12 +41,12 @@ jobs:
             --bin n64llm/n64-rust/assets/weights.bin \
             --man n64llm/n64-rust/assets/weights.manifest.bin --crc
 
+      - name: Install cargo-n64 (pinned)
+        run: bash tools/install_cargo_n64.sh
+
       - name: Build N64 ROM (release)
         working-directory: n64llm/n64-rust
-        run: |
-          rustup toolchain install nightly --profile minimal
-          cargo +nightly install cargo-n64
-          cargo +nightly -Z build-std=core,alloc n64 build --release
+        run: cargo +nightly -Z build-std=core,alloc n64 build --release
 
       - name: Scrub ephemerals
         run: |

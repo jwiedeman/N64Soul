@@ -103,7 +103,7 @@ pub unsafe fn pi_read(ram_address: *mut u8, rom_address: u32, length: u32) {
 }
 
 // Read controller data
-pub unsafe fn read_controller(controller: usize) -> ControllerData {
+pub unsafe fn read_controller(_controller: usize) -> ControllerData {
     // In a real implementation, this would read from the controller
     // For now, return a placeholder
     ControllerData {

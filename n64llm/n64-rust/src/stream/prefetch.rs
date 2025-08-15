@@ -1,6 +1,7 @@
 //! Double-buffered ROM prefetch for streaming large layers.
 //! Safe API; uses async PI DMA under the hood.
 
+#[cfg(target_arch = "mips")]
 use crate::platform::pi::{pi_dma_start, pi_dma_wait_idle};
 use crate::platform::cart::RomSource;
 use crate::weights::weights_rel_to_cart_off;
