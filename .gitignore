@@ -1,2 +1,5 @@
 n64llm/n64-rust/assets/weights.bin
 n64llm/n64-rust/assets/weights.manifest.bin
+# N64 weights blobs
+n64llm/n64-rust/assets/*.bin
+artifacts/exports/**
