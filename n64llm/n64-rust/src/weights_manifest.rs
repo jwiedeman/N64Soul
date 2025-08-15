@@ -11,6 +11,7 @@ pub struct Entry<'a> {
     pub name: &'a str,
     pub offset: u32,
     pub size: u32,
+    pub crc32: Option<u32>,
 }
 
 pub struct ManifestView<'a> {
@@ -18,6 +19,7 @@ pub struct ManifestView<'a> {
     align: u16,
     count: u32,
     off_entries: usize,
+    ver: u16,
 }
 
 #[derive(Debug)]
@@ -39,13 +41,14 @@ impl<'a> ManifestView<'a> {
         if &bytes[0..4] != b"N64W" { return Err(ManErr::BadMagic); }
         i = 4;
         let ver = rd_u16_le(bytes, &mut i)?;
-        if ver != 1 { return Err(ManErr::BadVersion); }
+        if ver != 1 && ver != 2 { return Err(ManErr::BadVersion); }
         let align = rd_u16_le(bytes, &mut i)?;
         let count = rd_u32_le(bytes, &mut i)?;
-        Ok(Self { bytes, align, count, off_entries: i })
+        Ok(Self { bytes, align, count, off_entries: i, ver })
     }
     pub fn align(&self) -> u16 { self.align }
     pub fn count(&self) -> u32 { self.count }
+    pub fn version(&self) -> u16 { self.ver }
 
     pub fn for_each<F: FnMut(Entry<'a>) -> bool>(&self, mut f: F) -> Result<(), ManErr> {
         let mut i = self.off_entries;
@@ -55,8 +58,14 @@ impl<'a> ManifestView<'a> {
             let name_bytes = &self.bytes[i..i+nlen]; i += nlen;
             let off = u32::from_le_bytes(self.bytes[i..i+4].try_into().unwrap()); i += 4;
             let sz  = u32::from_le_bytes(self.bytes[i..i+4].try_into().unwrap()); i += 4;
+            let crc32 = if self.ver >= 2 {
+                if i + 4 > self.bytes.len() { return Err(ManErr::Truncated); }
+                let c = u32::from_le_bytes(self.bytes[i..i+4].try_into().unwrap()); i += 4; Some(c)
+            } else {
+                None
+            };
             let name = core::str::from_utf8(name_bytes).map_err(|_| ManErr::Utf8)?;
-            if !f(Entry { name, offset: off, size: sz }) { break; }
+            if !f(Entry { name, offset: off, size: sz, crc32 }) { break; }
         }
         Ok(())
     }

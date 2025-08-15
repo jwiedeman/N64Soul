@@ -23,11 +23,17 @@ pub fn stream_layer<R: RomSource>(
     let pre = unsafe { Prefetcher::new(rom, layer.offset as u64, layer.len as u64, &mut A, &mut B) };
     let mut pf = pre;
     let total = layer.len as u64;
+    let mut bursts = 0usize;
     while let Some(chunk) = pf.next_block() {
         consume(chunk);
-        let done = total - pf.remaining();
-        on_progress(done, total);
+        bursts += 1;
+        if bursts >= crate::config::UI_BURSTS_PER_REFRESH {
+            let done = total - pf.remaining();
+            on_progress(done, total);
+            bursts = 0;
+        }
     }
+    on_progress(total, total);
     Ok(())
 }
 
@@ -35,16 +41,14 @@ pub fn checksum_all_layers<R: RomSource + Copy>(
     rom: R,
     manifest: &Manifest,
 ) -> Option<u32> {
-    let mut crc: u32 = 0;
+    let mut crc: u32 = !0u32;
     for layer in &manifest.layers {
         let desc = LayerDesc { offset: layer.offset, len: layer.size };
         if stream_layer(rom, &desc, |chunk| {
-            for &b in chunk {
-                crc = crc.rotate_left(5) ^ b as u32;
-            }
+            crc = crate::util::crc32::crc32_update(crc, chunk);
         }, |_, _| ()).is_err() {
             return None;
         }
     }
-    Some(crc)
+    Some(crate::util::crc32::crc32_finish(crc))
 }

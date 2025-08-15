@@ -46,19 +46,13 @@ pub extern "C" fn main() -> ! {
         &weights_manifest::MODEL_MANIFEST,
         weights::weights_rom_size(),
     );
-
+    diag::stream_crc::run(&mut rr, &crate::weights_manifest::MODEL_MANIFEST);
     diag::stream_bench::run(&mut rr, &crate::weights_manifest::MODEL_MANIFEST);
     diag::decode_once::run(&mut rr, &crate::weights_manifest::MODEL_MANIFEST, 42);
     wait_for_start_button();
 
     let manifest = manifest::load();
     display::print_line(&format!("Manifest layers: {}", manifest.layers.len()));
-
-    display::print_line("Running ROM checksum...");
-    match model::stream::checksum_all_layers(&mut rr, &manifest) {
-        Some(sum) => display::print_line(&format!("Checksum: 0x{:08X}", sum)),
-        None => display::print_line("Checksum failed"),
-    }
 
     // Initialize memory management system.
     let mut memory = unsafe { memory_manager::init() };

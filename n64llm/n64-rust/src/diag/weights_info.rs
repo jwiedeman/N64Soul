@@ -1,5 +1,6 @@
 use crate::weights::{weights_rel_to_cart_off, weights_rom_base, weights_rom_size};
 use crate::{display, io::rom_reader::RomReader};
+use alloc::format;
 
 pub fn show_weights_info<R: RomReader>(rr: &mut R) {
     let base = weights_rom_base();

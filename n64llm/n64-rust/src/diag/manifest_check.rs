@@ -1,5 +1,6 @@
 use crate::{display, io::rom_reader::RomReader, weights_manifest::ManifestView};
 use crate::weights::weights_rel_to_cart_off;
+use alloc::format;
 
 pub fn manifest_check<R: RomReader>(rr: &mut R, man_bytes: &'static [u8], weights_size: u64) {
     display::print_line("=== MANIFEST CHECK ===");

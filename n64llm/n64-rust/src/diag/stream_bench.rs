@@ -5,6 +5,7 @@ use crate::stream::streamer::stream_entry;
 use crate::display;
 use crate::config::BENCH_MAX_BYTES_PER_ENTRY;
 use crate::util::adler32;
+use alloc::format;
 
 pub fn run<R: RomReader>(rr: &mut R, man_bytes: &'static [u8]) {
     display::print_line("=== STREAM BENCH ===");
