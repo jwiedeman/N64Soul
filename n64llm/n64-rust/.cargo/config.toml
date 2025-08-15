@@ -1,12 +1,4 @@
-[build]
-target = "mips-nintendo64-none"
-
 [target.mips-nintendo64-none]
-# (Runner only used for `cargo run`; CI calls `nust64` directly.)
-rustflags = [
-    "-C", "link-arg=-Tn64.ld",
-    "-C", "target-feature=+float,+soft-float",
-]
+runner = ["cargo-n64", "run", "--ipl3", "6102"]
+rustflags = ["-C", "link-arg=-Tn64.ld", "-C", "target-feature=+soft-float"]
 
-[unstable]
-build-std = ["core", "alloc"]

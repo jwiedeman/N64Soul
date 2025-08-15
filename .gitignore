@@ -6,7 +6,6 @@
 *.d
 
 # Model blobs (never commit)
-n64llm/n64-rust/assets/weights.bin
-n64llm/n64-rust/assets/weights.manifest.bin
+/n64llm/n64-rust/assets/weights*.bin
 
 artifacts/exports/**
