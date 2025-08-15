@@ -70,3 +70,47 @@ impl<'a> ManifestView<'a> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::vec::Vec;
+
+    #[test]
+    fn v1_and_v2_manifest_parse() {
+        // v1: magic, ver=1, align=64, count=1, entry("a", off=64, sz=3)
+        let mut v1: Vec<u8> = b"N64W".to_vec();
+        v1.extend(&1u16.to_le_bytes());
+        v1.extend(&64u16.to_le_bytes());
+        v1.extend(&1u32.to_le_bytes());
+        v1.extend(&(1u16.to_le_bytes()));
+        v1.push(b'a');
+        v1.extend(&64u32.to_le_bytes());
+        v1.extend(&3u32.to_le_bytes());
+        let m1 = ManifestView::new(&v1).unwrap();
+        assert_eq!(m1.version(), 1);
+        let mut seen = false;
+        m1.for_each(|e| {
+            seen = true;
+            assert_eq!(e.name, "a");
+            assert_eq!(e.offset, 64);
+            assert_eq!(e.size, 3);
+            assert!(e.crc32.is_none());
+            true
+        }).unwrap();
+        assert!(seen);
+
+        // v2 adds CRC
+        let mut v2 = v1.clone();
+        v2[4] = 2; // set version=2
+        v2.extend(&0xDEADBEEFu32.to_le_bytes());
+        let m2 = ManifestView::new(&v2).unwrap();
+        assert_eq!(m2.version(), 2);
+        let mut crc_ok = false;
+        m2.for_each(|e| {
+            crc_ok = e.crc32 == Some(0xDEADBEEF);
+            true
+        }).unwrap();
+        assert!(crc_ok);
+    }
+}

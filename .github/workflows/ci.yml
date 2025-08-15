@@ -1,0 +1,62 @@
+name: n64soul-ci
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  rust-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tooling (Rust)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: mips-nintendo64-none
+
+      - name: Python
+        uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+
+      - name: Deps
+        run: |
+          python -m pip install --upgrade pip
+          sudo apt-get update
+          sudo apt-get install -y lld
+
+      - name: Debug weights (tiny)
+        run: |
+          python tools/make_debug_weights.py \
+            --out-bin n64llm/n64-rust/assets/weights.bin \
+            --out-man n64llm/n64-rust/assets/weights.manifest.bin
+          python tools/validate_weights.py --bin n64llm/n64-rust/assets/weights.bin --man n64llm/n64-rust/assets/weights.manifest.bin --crc
+
+      - name: Build ROM (Rust)
+        run: |
+          cargo install cargo-n64
+          cd n64llm/n64-rust
+          cargo n64 build --release
+        env:
+          RUSTFLAGS: "-C link-arg=-Tn64.ld"
+
+      - name: Unit tests (host)
+        run: cargo test --verbose
+        working-directory: n64llm/n64-rust
+
+      - name: Summarize manifest
+        run: |
+          echo "### Manifest summary" >> $GITHUB_STEP_SUMMARY
+          python - << 'PY'
+import struct, sys
+p="n64llm/n64-rust/assets/weights.manifest.bin"
+b=open(p,"rb").read()
+ver, align, n = struct.unpack("<x4xHHI", b[:12])
+print(f"* version={ver}, align={align}, entries={n}")
+PY          >> $GITHUB_STEP_SUMMARY
+
+      - name: Scrub ephemerals
+        run: |
+          rm -f n64llm/n64-rust/assets/weights.bin n64llm/n64-rust/assets/weights.manifest.bin
+          find target -type f \( -name "*.z64" -o -name "*.n64" \) -delete

@@ -18,7 +18,11 @@ pub struct Prefetcher<'a, R: RomSource> {
 impl<'a, R: RomSource> Prefetcher<'a, R> {
     pub fn new(mut rom: R, weights_rel_off: u64, total_len: u64,
                buf_a: &'a mut [u8], buf_b: &'a mut [u8]) -> Self {
-        let cart_off = weights_rel_to_cart_off(weights_rel_off);
+        let cart_off = if cfg!(all(target_arch = "mips", not(test))) {
+            weights_rel_to_cart_off(weights_rel_off)
+        } else {
+            weights_rel_off
+        };
         // Prime A synchronously so callers can read immediately.
         let first = core::cmp::min(total_len as usize, buf_a.len());
         rom.read_abs(cart_off, &mut buf_a[..first]).unwrap();
@@ -32,10 +36,15 @@ impl<'a, R: RomSource> Prefetcher<'a, R> {
         let tgt = if self.cur == 0 { 1 } else { 0 };
         let buf = if tgt == 0 { &mut self.buf_a } else { &mut self.buf_b };
         let want = core::cmp::min(self.len as usize, buf.len());
+        #[cfg(all(target_arch = "mips", not(test)))]
         unsafe {
             let dst = buf.as_mut_ptr();
             let cart_addr = (crate::n64_sys::CART_ROM_BASE + self.cart_off) as u32;
             pi_dma_start(dst, cart_addr, want as u32);
+        }
+        #[cfg(any(test, not(target_arch = "mips")))]
+        {
+            self.rom.read_abs(self.cart_off, &mut buf[..want]).unwrap();
         }
     }
 
@@ -43,6 +52,7 @@ impl<'a, R: RomSource> Prefetcher<'a, R> {
     pub fn next_block(&mut self) -> Option<&[u8]> {
         if self.len == 0 && self.filled[self.cur] == 0 { return None; }
         // If a prefetch was kicked, finalize it and update accounting.
+        #[cfg(all(target_arch = "mips", not(test)))]
         pi_dma_wait_idle();
         if self.filled[self.cur] == 0 {
             // We were waiting on the other buffer; mark it filled now.
@@ -72,5 +82,34 @@ impl<'a, R: RomSource> Prefetcher<'a, R> {
         Some(slice)
     }
 
-    pub fn remaining(&self) -> u64 { self.len + self.filled[self.cur] as u64 }
+pub fn remaining(&self) -> u64 { self.len + self.filled[self.cur] as u64 }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::platform::cart::RomSource;
+    use alloc::vec;
+    use alloc::vec::Vec;
+
+    struct VecRom(Vec<u8>);
+    impl RomSource for VecRom {
+        fn read_abs(&mut self, off: u64, dst: &mut [u8]) -> Result<(), ()> {
+            let off = off as usize;
+            dst.copy_from_slice(&self.0[off..off+dst.len()]);
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn prefetch_double_buffer_walks_full_payload() {
+        let data: Vec<u8> = (0..200_000).map(|i| i as u8).collect();
+        let mut a = vec![0u8; 8192];
+        let mut b = vec![0u8; 8192];
+        let mut pf = Prefetcher::new(VecRom(data.clone()), 0, data.len() as u64, &mut a, &mut b);
+        let mut acc = Vec::new();
+        while let Some(chunk) = pf.next_block() { acc.extend_from_slice(chunk); }
+        assert_eq!(acc.len(), data.len());
+        assert_eq!(&acc[..], &data[..]);
+    }
 }
