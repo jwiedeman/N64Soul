@@ -47,6 +47,8 @@ cargo n64 build --release
 ```
 
 This will produce a bootable Nintendo&nbsp;64 ROM in `target/mips-nintendo64-none/release/`.
+The linker and configuration reserve up to roughly 1&nbsp;GiB of cart ROM space,
+though the actual usable limit depends on your flashcart or emulator.
 
 ## Building the C project
 
@@ -69,6 +71,8 @@ mupen64plus target/mips-nintendo64-none/release/n64_gpt.n64
 ```
 
 (Replace the path with the built ROM.)
+The helper script `scripts/emu_smoke.sh` can perform a headless emulator smoke
+test; it will never move binaries for you and instead asks where to place them.
 
 ## Running on real hardware
 
@@ -102,6 +106,12 @@ python tools/validate_weights.py --bin n64llm/n64-rust/assets/weights.bin \
 The script checks that `n64llm/n64-rust/assets/weights.bin` exists, that each layer in
 `weights.manifest.bin` is 64-byte aligned, and that the sizes sum to the file
 length.
+
+For a one-shot export, validation, build, optional smoke test, and cleanup, run:
+
+```bash
+./scripts/export_and_test.sh --spec configs/weights_spec.json
+```
 
 ### Git hook for automatic validation
 
