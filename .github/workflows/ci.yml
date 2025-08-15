@@ -45,15 +45,42 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: bash tools/install_cargo_n64.sh
 
-      - name: Build N64 ROM
+      - name: Prepare IPL3 (if provided)
+        if: ${{ secrets.N64_IPL3_BASE64 }}
+        run: |
+          echo "$N64_IPL3_BASE64" | base64 -d > ipl3.bin
+        env:
+          N64_IPL3_BASE64: ${{ secrets.N64_IPL3_BASE64 }}
         working-directory: n64llm/n64-rust
-        run: cargo +nightly -Z build-std=core,alloc n64 build
+
+      - name: Prepare donor ROM
+        if: ${{ secrets.N64_DONOR_ROM_BASE64 }}
+        run: |
+          echo "$N64_DONOR_ROM_BASE64" | base64 -d > donor.z64
+        env:
+          N64_DONOR_ROM_BASE64: ${{ secrets.N64_DONOR_ROM_BASE64 }}
+        working-directory: n64llm/n64-rust
+
+      - name: Build N64 ROM
+        if: ${{ secrets.N64_IPL3_BASE64 }}
+        working-directory: n64llm/n64-rust
+        run: cargo +nightly -Z build-std=core,alloc n64 build --ipl3 ./ipl3.bin
+
+      - name: Build N64 ROM (extract IPL3)
+        if: ${{ secrets.N64_DONOR_ROM_BASE64 }}
+        working-directory: n64llm/n64-rust
+        run: cargo +nightly -Z build-std=core,alloc n64 build --ipl3-from-rom ./donor.z64
 
       - name: Upload ROM artifact
+        if: ${{ secrets.N64_IPL3_BASE64 || secrets.N64_DONOR_ROM_BASE64 }}
         uses: actions/upload-artifact@v4
         with:
           name: n64-rom-debug
           path: n64llm/n64-rust/target/n64/debug/*.n64
+
+      - name: Skip ROM build (no IPL3)
+        if: ${{ !secrets.N64_IPL3_BASE64 && !secrets.N64_DONOR_ROM_BASE64 }}
+        run: echo "No IPL3 secret configured; skipping ROM build step."
 
       - name: Scrub ephemerals
         run: |
