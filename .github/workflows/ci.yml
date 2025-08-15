@@ -45,9 +45,15 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: bash tools/install_cargo_n64.sh
 
-      - name: Build N64 ROM (release)
+      - name: Build N64 ROM
         working-directory: n64llm/n64-rust
-        run: cargo +nightly -Z build-std=core,alloc n64 build --profile release
+        run: cargo +nightly -Z build-std=core,alloc n64 build
+
+      - name: Upload ROM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: n64-rom-debug
+          path: n64llm/n64-rust/target/n64/debug/*.n64
 
       - name: Scrub ephemerals
         run: |
