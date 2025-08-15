@@ -78,8 +78,8 @@ ROM size produced by the project.
 
 ## Exporting model weights
 
-Model weights live in `n64llm/assets/weights.bin` with layout described by
-`weights.manifest.json`. The helper script `tools/export_model.py` can combine
+Model weights live in `n64llm/n64-rust/assets/weights.bin` with layout described by
+`weights.manifest.bin`. The helper script `tools/export_model.py` can combine
 individual layer files into these artifacts:
 
 ```bash
@@ -95,11 +95,12 @@ Before running on real hardware you can verify that the bundled weight blob
 matches its manifest. Run the helper script from the repository root:
 
 ```bash
-python tools/validate_weights.py
+python tools/validate_weights.py --bin n64llm/n64-rust/assets/weights.bin \
+  --man n64llm/n64-rust/assets/weights.manifest.bin
 ```
 
-The script checks that `n64llm/assets/weights.bin` exists, that each layer in
-`weights.manifest.json` is 64-byte aligned, and that the sizes sum to the file
+The script checks that `n64llm/n64-rust/assets/weights.bin` exists, that each layer in
+`weights.manifest.bin` is 64-byte aligned, and that the sizes sum to the file
 length.
 
 ### Git hook for automatic validation
@@ -112,5 +113,5 @@ git config core.hooksPath .githooks
 ```
 
 With the hook active, any commit that modifies
-`n64llm/assets/weights.bin` will automatically invoke
+`n64llm/n64-rust/assets/weights.bin` will automatically invoke
 `tools/validate_weights.py` and abort the commit if validation fails.
