@@ -1,36 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.."; pwd)"
-ASSETS="$ROOT/n64llm/n64-rust/assets"
-BIN="$ASSETS/weights.bin"
-MAN="$ASSETS/weights.manifest.bin"
+# 0) Host tests (no assets)
+( cd n64llm/n64-rust && cargo test --lib --features host --verbose )
+( cd n64llm/n64-rust && cargo test --test host_sanity --features host --verbose )
 
-# Never move user binaries. Only write ephemeral debug blobs here.
-cleanup() {
-  rm -f "$BIN" "$MAN" || true
-  # also delete any ROM made here
-  find "$ROOT/target" -maxdepth 3 -type f \( -name "*.z64" -o -name "*.n64" \) -delete || true
-}
-trap cleanup EXIT
+# 1) Tiny debug weights (ephemeral)
+python tools/make_debug_weights.py \
+  --out-bin n64llm/n64-rust/assets/weights.bin \
+  --out-man n64llm/n64-rust/assets/weights.manifest.bin
 
-mkdir -p "$ASSETS"
+python tools/validate_weights.py \
+  --bin n64llm/n64-rust/assets/weights.bin \
+  --man n64llm/n64-rust/assets/weights.manifest.bin --crc
 
-# 1) Export (v2 manifest by default). Either --spec or name=path pairs are accepted.
-python3 "$ROOT/tools/export_model.py" \
-  --out-bin "$BIN" --out-man "$MAN" --man-version 2 "$@"
+# 2) Build ROM (nightly) with build-std only here
+( cd n64llm/n64-rust && cargo +nightly -Z build-std=core,alloc n64 build --release )
 
-# 2) Validate + CRC check
-python3 "$ROOT/tools/validate_weights.py" --bin "$BIN" --man "$MAN" --crc
+# 3) Optional emu smoke (never moves binaries; asks where to place)
+./scripts/emu_smoke.sh || true
 
-# 3) Build N64 ROM (no moving binaries)
-rustup target add mips-nintendo64-none >/dev/null 2>&1 || true
-cargo install cargo-n64 >/dev/null 2>&1 || true
-( cd "$ROOT/n64llm/n64-rust" && cargo n64 build --release )
+# 4) SCRUB every binary weight artifact (CI hard rule)
+rm -f n64llm/n64-rust/assets/weights.bin n64llm/n64-rust/assets/weights.manifest.bin
 
-# 4) Try running headless smoke if the helper is present (optional)
-if [[ -x "$ROOT/scripts/emu_smoke.sh" ]]; then
-  "$ROOT/scripts/emu_smoke.sh" || true
-fi
-
-echo "All good. Ephemeral blobs will now be deleted."

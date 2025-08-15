@@ -6,12 +6,6 @@ description = "A no_std Nintendo 64 GPT project."
 authors = ["Your Name <your.email@example.com>"]
 license = "MIT OR Apache-2.0"
 
-# Custom rustflags to use our linker script (n64.ld) and enable the required floating-point features.
-rustflags = [
-    "-C", "link-arg=-Tn64.ld",
-    "-C", "target-feature=+float,+soft-float",
-]
-
 # For no_std environments you typically don't need any default features.
 [features]
 default = []
@@ -34,3 +28,4 @@ heapless = { version = "0.7", default-features = false }
 [[bin]]
 name = "n64_gpt"
 path = "src/main.rs"
+required-features = ["embed_assets"]
