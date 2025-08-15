@@ -1,4 +1,4 @@
-use crate::{weights, weights_manifest::{self, ManifestView}};
+use crate::{weights, weights_manifest};
 use alloc::string::ToString;
 use alloc::{string::String, vec::Vec};
 

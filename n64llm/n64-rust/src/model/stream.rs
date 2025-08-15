@@ -20,7 +20,15 @@ pub fn stream_layer<R: RomSource>(
     // Static 2×32 KiB (tweak in config if you like).
     static mut A: [u8; crate::config::STREAM_BLOCK_BYTES] = [0; crate::config::STREAM_BLOCK_BYTES];
     static mut B: [u8; crate::config::STREAM_BLOCK_BYTES] = [0; crate::config::STREAM_BLOCK_BYTES];
-    let pre = unsafe { Prefetcher::new(rom, layer.offset as u64, layer.len as u64, &mut A, &mut B) };
+    let pre = unsafe {
+        Prefetcher::new(
+            rom,
+            layer.offset as u64,
+            layer.len as u64,
+            &mut *(&raw mut A),
+            &mut *(&raw mut B),
+        )
+    };
     let mut pf = pre;
     let total = layer.len as u64;
     let mut bursts = 0usize;
