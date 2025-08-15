@@ -11,7 +11,7 @@ extern "C" {
 }
 #[inline(always)]
 pub fn weights_rom_base() -> u32 {
-    0x1000_0000 + unsafe { &__weights_rom_start as *const _ as u32 }
+    crate::n64_sys::CART_ROM_BASE as u32 + unsafe { &__weights_rom_start as *const _ as u32 }
 }
 #[inline(always)]
 pub fn weights_rom_size() -> u64 {
@@ -20,5 +20,5 @@ pub fn weights_rom_size() -> u64 {
 #[inline(always)]
 pub fn weights_rel_to_cart_off(rel: u64) -> u64 {
     let abs = weights_rom_base() as u64 + rel;
-    abs - crate::platform::pi::CART_BASE
+    abs - crate::n64_sys::CART_ROM_BASE as u64
 }

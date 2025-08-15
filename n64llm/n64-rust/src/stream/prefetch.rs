@@ -47,14 +47,16 @@ impl<'a, R: RomSource> Prefetcher<'a, R> {
         if self.filled[self.cur] == 0 {
             // We were waiting on the other buffer; mark it filled now.
             let tgt = if self.cur == 0 { 1 } else { 0 };
-            let got = core::cmp::min(self.len as usize,
-                                     if tgt==0 { self.buf_a.len() } else { self.buf_b.len() });
+            let got = core::cmp::min(
+                self.len as usize,
+                if tgt == 0 { self.buf_a.len() } else { self.buf_b.len() }
+            );
             self.filled[tgt] = got;
             self.cart_off += got as u64;
             self.len -= got as u64;
             self.cur = tgt;
         }
-        let (slice, got) = if self.cur == 0 {
+        let (slice, _got) = if self.cur == 0 {
             (&self.buf_a[..self.filled[0]], self.filled[0])
         } else {
             (&self.buf_b[..self.filled[1]], self.filled[1])
@@ -65,6 +67,8 @@ impl<'a, R: RomSource> Prefetcher<'a, R> {
             self.filled[tgt] = 0; // mark empty while DMA runs
             self.prefetch_next();
         }
+        // Mark current buffer as consumed so the next call swaps.
+        self.filled[self.cur] = 0;
         Some(slice)
     }
 

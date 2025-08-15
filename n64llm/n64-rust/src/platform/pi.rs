@@ -4,8 +4,6 @@ use crate::n64_sys::{
     PI_STATUS_DMA_BUSY, CART_ROM_BASE,
 };
 
-pub const CART_BASE: u64 = 0x1000_0000; // N64 cart PI bus base
-
 #[inline(always)]
 fn pi_busy() -> bool {
     unsafe { (read_volatile(PI_STATUS_REG as *const u32) & PI_STATUS_DMA_BUSY) != 0 }
