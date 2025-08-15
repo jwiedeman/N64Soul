@@ -65,7 +65,7 @@ pub fn checksum_all_layers<R: RomSource + Copy>(
 mod t_stream {
     use super::*;
     use crate::platform::host_cart::VecRom;
-    use crate::stream::prefetch::Prefetcher;
+    // use crate::stream::prefetch::Prefetcher; // not needed in this host-only test
     use alloc::vec::Vec;
 
     #[test]
