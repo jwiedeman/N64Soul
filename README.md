@@ -10,20 +10,16 @@ This repository experiments with running a language model on Nintendo 64 hardwar
 The Rust code is the focus for new features. All crates are built with
 `no_std` and target `mips-nintendo64-none`.
 
-## Dev Quickstart (host tests + ROM pack)
-```bash
-# 1) Run host tests (no assets needed)
-(cd n64llm/n64-rust && cargo test --target x86_64-unknown-linux-gnu)
+## Dev Quickstart (one command)
+Run tests, build a ROM with temporary debug weights, optionally offer an emulator
+smoke test, and scrub the weight blobs:
 
-# 2) Generate tiny debug blobs (ephemeral), validate, build ROM, scrub
-python tools/make_debug_weights.py \
-  --out-bin n64llm/n64-rust/assets/weights.bin \
-  --out-man n64llm/n64-rust/assets/weights.manifest.bin
-python tools/validate_weights.py --bin n64llm/n64-rust/assets/weights.bin --man n64llm/n64-rust/assets/weights.manifest.bin --crc
-(cd n64llm/n64-rust && cargo +nightly build --release --target mips-nintendo64-none)
-(cd n64llm/n64-rust && nust64 --libdragon release --elf target/mips-nintendo64-none/release/n64_gpt --out n64_gpt.z64)
-rm -f n64llm/n64-rust/assets/weights.bin n64llm/n64-rust/assets/weights.manifest.bin n64llm/n64-rust/n64_gpt.z64
+```bash
+./scripts/export_and_test.sh
 ```
+
+If all prerequisites are installed this leaves a `n64_gpt.z64` ROM in
+`n64llm/n64-rust/`; otherwise the script exits with a descriptive error.
 
 ## Continuous Integration
 
@@ -38,6 +34,7 @@ copied below for convenience. See [docs/setup.md](docs/setup.md) for more detail
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 rustup toolchain install nightly --component rust-src
+cargo install cargo-n64
 cargo install nust64
 
 git clone https://github.com/dragonminded/libdragon.git
@@ -55,13 +52,12 @@ A custom toolchain is required. Build with nightly and package the resulting ELF
 
 ```bash
 cd n64llm/n64-rust
-cargo +nightly build --release --target mips-nintendo64-none
-nust64 --libdragon release --elf target/mips-nintendo64-none/release/n64_gpt --out n64_gpt.z64
+cargo +nightly -Z build-std=core,alloc n64 build --profile release
 ```
 
-This will produce a bootable Nintendo&nbsp;64 ROM named `n64_gpt.z64`.
-The linker and configuration reserve up to roughly 1&nbsp;GiB of cart ROM space,
-though the actual usable limit depends on your flashcart or emulator.
+This produces a bootable Nintendo&nbsp;64 ROM named `n64_gpt.z64` in the current
+directory. The linker and configuration reserve up to roughly 1&nbsp;GiB of cart
+ROM space, though the actual usable limit depends on your flashcart or emulator.
 
 ## Building the C project
 
@@ -123,7 +119,7 @@ length.
 For a one-shot export, validation, build, optional smoke test, and cleanup, run:
 
 ```bash
-./scripts/export_and_test.sh --spec configs/weights_spec.json
+./scripts/export_and_test.sh
 ```
 
 ### Git hook for automatic validation
