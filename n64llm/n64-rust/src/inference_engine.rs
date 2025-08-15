@@ -3,7 +3,7 @@ use core::result::Result;
 use core::fmt;
 use crate::memory_manager::MemoryManager;
 use crate::display;
-use crate::n64_sys::{PI_STATUS_REG, PI_STATUS_IO_BUSY, PI_STATUS_DMA_BUSY, pi_read};
+use crate::{platform::pi, weights};
 use crate::manifest;
 use alloc::vec;
 use crate::n64_math;
@@ -82,9 +82,8 @@ impl<'a> ModelState<'a> {
         self.current_layer_weights.clear();
     }
     
-    /// Read `size` bytes from ROM at (base address + offset) using DMA.
-    /// We allocate a temporary buffer in RDRAM, call pi_read to DMA data from ROM into it,
-    /// then convert the bytes into f32 values.
+    /// Read `size` bytes from ROM at (weights base + offset) using DMA and
+    /// convert the bytes into f32 values.
     fn read_from_rom(&mut self, offset: u32, size: usize) -> Result<(), Error> {
         // Allocate temporary buffer for DMA read.
         let buffer_ptr = match self.memory_manager.alloc(size, 4) {
@@ -92,20 +91,10 @@ impl<'a> ModelState<'a> {
             None => return Err(Error::MemoryError),
         };
 
-        // Calculate the ROM address: weights are expected at base 0x10000000 + offset.
-        let rom_address = 0x10000000u32 + offset;
-        
-        // Wait until any previous DMA is complete (optional if pi_read does that)
-        let pi_status_reg = unsafe { &*(PI_STATUS_REG as *const u32) };
-        while (*pi_status_reg & (PI_STATUS_IO_BUSY | PI_STATUS_DMA_BUSY)) != 0 {
-            // Busy wait
-        }
-        
-        // Perform DMA read: read `size` bytes from ROM into buffer_ptr.
-        unsafe {
-            pi_read(buffer_ptr, rom_address, size as u32);
-        }
-        
+        // Perform DMA read via platform PI layer
+        let cart_off = weights::weights_rel_to_cart_off(offset as u64);
+        let buf = unsafe { core::slice::from_raw_parts_mut(buffer_ptr, size) };
+        pi::pi_dma_read(cart_off, buf).map_err(|_| Error::RomReadError)?;
         // Now convert the DMA buffer into f32 values.
         let data = unsafe { core::slice::from_raw_parts(buffer_ptr, size) };
         for chunk in data.chunks(4) {

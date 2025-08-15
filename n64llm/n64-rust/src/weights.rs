@@ -1,42 +1,24 @@
 #![allow(dead_code)]
+#[link_section = ".model_weights"]
+#[used]
+pub static MODEL_WEIGHTS: [u8; { include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"),
+    "/assets/weights.bin")).len() }] =
+    *include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/weights.bin"));
 
-/// Linker-provided ROM symbols (absolute cart addresses).
 extern "C" {
-    static __model_weights_rom_start: u8;
-    static __model_weights_rom_end: u8;
-    static __model_weights_rom_size: u8; // value-only, but we'll compute size below
+    static __weights_rom_start: u8;
+    static __weights_rom_end: u8;
 }
-
-/// Return absolute ROM bus address of the weights section start.
 #[inline(always)]
-pub fn weights_rom_base() -> u64 {
-    unsafe { &__model_weights_rom_start as *const u8 as u64 }
+pub fn weights_rom_base() -> u32 {
+    0x1000_0000 + unsafe { &__weights_rom_start as *const _ as u32 }
 }
-
-/// Return the byte size of the weights section.
 #[inline(always)]
 pub fn weights_rom_size() -> u64 {
-    unsafe {
-        let start = &__model_weights_rom_start as *const u8 as u64;
-        let end = &__model_weights_rom_end as *const u8 as u64;
-        end - start
-    }
+    (unsafe { (&__weights_rom_end as *const _ as usize) - (&__weights_rom_start as *const _ as usize) }) as u64
 }
-
-/// Convenience: convert a weights-relative offset to a cart-space absolute offset
-/// suitable for PI reads (0-based within the cart region expected by pi_dma_read()).
 #[inline(always)]
 pub fn weights_rel_to_cart_off(rel: u64) -> u64 {
-    // Our PI layer expects offsets relative to the cart base (0x1000_0000).
-    // If your pi_dma_read() instead wants a full KSEG1 address, adjust there.
-    let cart_base = crate::platform::pi::CART_BASE;
-    let abs_addr = weights_rom_base() + rel;
-    abs_addr - cart_base
+    let abs = weights_rom_base() as u64 + rel;
+    abs - crate::platform::pi::CART_BASE
 }
-
-/// The actual blob embedded in the `.model_weights` section.
-/// We keep this tiny placeholder in tree; provide a real `assets/weights.bin`
-/// locally to replace it during builds.
-#[link_section = ".model_weights"]
-#[used] // ensure the linker keeps it
-pub static MODEL_WEIGHTS: [u8; 64] = [0; 64];
