@@ -1,6 +1,9 @@
 #![allow(dead_code)]
 
 pub const BURST_BYTES: usize = 32 * 1024; // Try 16K/32K/64K later
+
+// Size of each streaming block (x2 for double-buffer). Keep modest for 8 MiB RDRAM.
+pub const STREAM_BLOCK_BYTES: usize = 32 * 1024;
 pub const ROM_ALIGN: usize = 64;          // Exporter enforces; reader asserts
 pub const BENCH_MAX_BYTES_PER_ENTRY: u32 = 4 * 1024 * 1024; // cap per entry for quick bench
 pub const PROBE_OFFSETS: &[u64] = &[
