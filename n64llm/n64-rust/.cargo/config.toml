@@ -2,7 +2,7 @@
 target = "mips-nintendo64-none"
 
 [target.mips-nintendo64-none]
-runner = ["cargo-n64", "run", "--ipl3", "6102"]
+# (Runner only used for `cargo run`; CI calls `nust64` directly.)
 rustflags = [
     "-C", "link-arg=-Tn64.ld",
     "-C", "target-feature=+float,+soft-float",

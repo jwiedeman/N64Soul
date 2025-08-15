@@ -13,27 +13,32 @@ The Rust code is the focus for new features. All crates are built with
 ## Dev Quickstart (host tests + ROM pack)
 ```bash
 # 1) Run host tests (no assets needed)
-(cd n64llm/n64-rust && cargo test)
+(cd n64llm/n64-rust && cargo test --target x86_64-unknown-linux-gnu)
 
 # 2) Generate tiny debug blobs (ephemeral), validate, build ROM, scrub
 python tools/make_debug_weights.py \
   --out-bin n64llm/n64-rust/assets/weights.bin \
   --out-man n64llm/n64-rust/assets/weights.manifest.bin
 python tools/validate_weights.py --bin n64llm/n64-rust/assets/weights.bin --man n64llm/n64-rust/assets/weights.manifest.bin --crc
-(cd n64llm/n64-rust && cargo n64 build --release)
-rm -f n64llm/n64-rust/assets/weights.bin n64llm/n64-rust/assets/weights.manifest.bin
+(cd n64llm/n64-rust && cargo +nightly build --release --target mips-nintendo64-none)
+(cd n64llm/n64-rust && nust64 --libdragon release --elf target/mips-nintendo64-none/release/n64_gpt --out n64_gpt.z64)
+rm -f n64llm/n64-rust/assets/weights.bin n64llm/n64-rust/assets/weights.manifest.bin n64llm/n64-rust/n64_gpt.z64
 ```
+
+## Continuous Integration
+
+CI runs host-only unit tests, validates the generated weight manifest, builds and checksums a ROM image, and verifies no binary artifacts leak into the repository.
 
 ## Environment setup
 
-If you are preparing a fresh system you will need both the Rust `cargo-n64`
-toolchain and the libdragon MIPS toolchain. The exact commands are copied
-below for convenience. See [docs/setup.md](docs/setup.md) for more detail.
+If you are preparing a fresh system you will need both the Rust nightly toolchain
+with source components and the libdragon MIPS toolchain. The exact commands are
+copied below for convenience. See [docs/setup.md](docs/setup.md) for more detail.
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-rustup target add mips-nintendo64-none
-cargo install cargo-n64
+rustup toolchain install nightly --component rust-src
+cargo install nust64
 
 git clone https://github.com/dragonminded/libdragon.git
 cd libdragon
@@ -46,21 +51,15 @@ below.
 
 ## Building the Rust project
 
-A custom toolchain is required. Install [`cargo-n64`](https://github.com/rust-console/cargo-n64) and add the `mips-nintendo64-none` target:
-
-```bash
-rustup target add mips-nintendo64-none
-cargo install cargo-n64
-```
-
-Then build the project:
+A custom toolchain is required. Build with nightly and package the resulting ELF into a ROM:
 
 ```bash
 cd n64llm/n64-rust
-cargo n64 build --release
+cargo +nightly build --release --target mips-nintendo64-none
+nust64 --libdragon release --elf target/mips-nintendo64-none/release/n64_gpt --out n64_gpt.z64
 ```
 
-This will produce a bootable Nintendo&nbsp;64 ROM in `target/mips-nintendo64-none/release/`.
+This will produce a bootable Nintendo&nbsp;64 ROM named `n64_gpt.z64`.
 The linker and configuration reserve up to roughly 1&nbsp;GiB of cart ROM space,
 though the actual usable limit depends on your flashcart or emulator.
 
@@ -81,7 +80,7 @@ Both projects output standard N64 ROM images (`.z64`). Run them using an
 emulator such as **Mupen64Plus** or **Ares**:
 
 ```bash
-mupen64plus target/mips-nintendo64-none/release/n64_gpt.n64
+mupen64plus n64llm/n64-rust/n64_gpt.z64
 ```
 
 (Replace the path with the built ROM.)

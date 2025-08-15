@@ -11,10 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Tooling (Rust)
-        uses: dtolnay/rust-toolchain@stable
+      - name: Tooling (Rust - nightly for N64)
+        uses: dtolnay/rust-toolchain@nightly
         with:
-          targets: mips-nintendo64-none
+          components: rust-src
 
       - name: Python
         uses: actions/setup-python@v5
@@ -36,18 +36,30 @@ jobs:
             --man n64llm/n64-rust/assets/weights.manifest.bin --crc
 
       - name: Host unit tests (asset-free)
-        run: cargo test --lib --verbose
+        run: cargo test --lib --verbose --target x86_64-unknown-linux-gnu
         working-directory: n64llm/n64-rust
 
-      - name: Build N64 ROM
+      - name: Build ROM (ELF -> ROM via nust64 + libdragon IPL3)
         run: |
-          cargo install cargo-n64
-          cd n64llm/n64-rust
-          cargo n64 build --release
+          cargo install --target x86_64-unknown-linux-gnu nust64
+          # Build for mips-nintendo64-none; std = core,alloc comes from .cargo/config.toml
+          cargo +nightly build --release --target mips-nintendo64-none
+          ELF=target/mips-nintendo64-none/release/n64_gpt
+          # Produce a ROM using libdragon’s open IPL3 (no proprietary blob needed)
+          nust64 --libdragon release --elf "$ELF" --out n64_gpt_debug.z64
           echo "### ROM output" >> $GITHUB_STEP_SUMMARY
-          find target -type f -name "*.z64" -printf "* %p (%k KiB)\n" >> $GITHUB_STEP_SUMMARY
+          du -h n64_gpt_debug.z64 | awk '{print "* ROM size: " $1}' >> $GITHUB_STEP_SUMMARY
+          sha256sum n64_gpt_debug.z64 | awk '{print "* sha256: " $1}' >> $GITHUB_STEP_SUMMARY
+        working-directory: n64llm/n64-rust
 
       - name: Scrub ephemerals
         run: |
           rm -f n64llm/n64-rust/assets/weights.bin n64llm/n64-rust/assets/weights.manifest.bin
           find n64llm/n64-rust/target -type f \( -name "*.z64" -o -name "*.n64" \) -delete
+
+      - name: No binaries leaked into tree
+        run: |
+          set -e
+          test ! -e n64llm/n64-rust/assets/weights.bin
+          test ! -e n64llm/n64-rust/assets/weights.manifest.bin
+          ! git ls-files -o --exclude-standard | grep -E '\.(bin|z64|n64)$' || (echo "Found stray binaries"; exit 1)
