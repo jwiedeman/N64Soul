@@ -66,17 +66,17 @@ impl<'a, R: RomSource> Prefetcher<'a, R> {
             self.len -= got as u64;
             self.cur = tgt;
         }
-        let (slice, _got) = if self.cur == 0 {
-            (&self.buf_a[..self.filled[0]], self.filled[0])
-        } else {
-            (&self.buf_b[..self.filled[1]], self.filled[1])
-        };
-        // Prepare the other buffer for the next call.
+        // Prepare the other buffer for the next call before borrowing the slice.
         let tgt = if self.cur == 0 { 1 } else { 0 };
         if self.len > 0 {
             self.filled[tgt] = 0; // mark empty while DMA runs
             self.prefetch_next();
         }
+        let slice = if self.cur == 0 {
+            &self.buf_a[..self.filled[0]]
+        } else {
+            &self.buf_b[..self.filled[1]]
+        };
         // Mark current buffer as consumed so the next call swaps.
         self.filled[self.cur] = 0;
         Some(slice)
@@ -88,21 +88,12 @@ pub fn remaining(&self) -> u64 { self.len + self.filled[self.cur] as u64 }
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::platform::cart::RomSource;
+    use crate::platform::host_cart::VecRom;
     use alloc::vec;
     use alloc::vec::Vec;
 
-    struct VecRom(Vec<u8>);
-    impl RomSource for VecRom {
-        fn read_abs(&mut self, off: u64, dst: &mut [u8]) -> Result<(), ()> {
-            let off = off as usize;
-            dst.copy_from_slice(&self.0[off..off+dst.len()]);
-            Ok(())
-        }
-    }
-
     #[test]
-    fn prefetch_double_buffer_walks_full_payload() {
+    fn prefetch_reads_all_bytes_in_order() {
         let data: Vec<u8> = (0..200_000).map(|i| i as u8).collect();
         let mut a = vec![0u8; 8192];
         let mut b = vec![0u8; 8192];

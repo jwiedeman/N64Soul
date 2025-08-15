@@ -52,3 +52,24 @@ pub fn checksum_all_layers<R: RomSource + Copy>(
     }
     Some(crate::util::crc32::crc32_finish(crc))
 }
+
+#[cfg(test)]
+mod t_stream {
+    use super::*;
+    use crate::platform::host_cart::VecRom;
+    use crate::stream::prefetch::Prefetcher;
+    use alloc::vec::Vec;
+
+    #[test]
+    fn stream_reports_progress_and_consumes_all() {
+        let data: Vec<u8> = (0..100_000).map(|i| (i as u8)).collect();
+        let desc = LayerDesc { offset: 0, len: data.len() as u32 };
+        let mut got = Vec::<u8>::new();
+        let mut last = (0u64, desc.len as u64);
+        let rom = VecRom(data.clone());
+        let ok = stream_layer(rom, &desc, |chunk| got.extend_from_slice(chunk), |d,t| { last = (d,t); }).is_ok();
+        assert!(ok);
+        assert_eq!(got, data);
+        assert_eq!(last, (desc.len as u64, desc.len as u64));
+    }
+}

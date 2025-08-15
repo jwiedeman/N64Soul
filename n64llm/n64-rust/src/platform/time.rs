@@ -3,11 +3,15 @@
 pub const COUNT_HZ: u64 = 46_875_000;
 
 #[inline(always)]
+#[cfg(target_arch = "mips")]
 pub fn now_cycles() -> u64 {
     let v: u32;
     unsafe { core::arch::asm!("mfc0 {0}, $9", out(reg) v) };
     v as u64 // 32-bit; fine for short intervals
 }
+#[inline(always)]
+#[cfg(not(target_arch = "mips"))]
+pub fn now_cycles() -> u64 { 0 }
 
 #[inline(always)]
 pub fn cycles_to_us(cycles: u64) -> u64 {

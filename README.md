@@ -10,6 +10,20 @@ This repository experiments with running a language model on Nintendo 64 hardwar
 The Rust code is the focus for new features. All crates are built with
 `no_std` and target `mips-nintendo64-none`.
 
+## Dev Quickstart (host tests + ROM pack)
+```bash
+# 1) Run host tests (no assets needed)
+(cd n64llm/n64-rust && cargo test)
+
+# 2) Generate tiny debug blobs (ephemeral), validate, build ROM, scrub
+python tools/make_debug_weights.py \
+  --out-bin n64llm/n64-rust/assets/weights.bin \
+  --out-man n64llm/n64-rust/assets/weights.manifest.bin
+python tools/validate_weights.py --bin n64llm/n64-rust/assets/weights.bin --man n64llm/n64-rust/assets/weights.manifest.bin --crc
+(cd n64llm/n64-rust && cargo n64 build --release)
+rm -f n64llm/n64-rust/assets/weights.bin n64llm/n64-rust/assets/weights.manifest.bin
+```
+
 ## Environment setup
 
 If you are preparing a fresh system you will need both the Rust `cargo-n64`

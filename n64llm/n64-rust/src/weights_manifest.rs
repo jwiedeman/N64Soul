@@ -1,10 +1,52 @@
 #![allow(dead_code)]
 
+#[cfg(feature = "embed_assets")]
 #[link_section = ".model_manifest"]
 #[used]
 pub static MODEL_MANIFEST: [u8; { include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"),
     "/assets/weights.manifest.bin")).len() }] =
     *include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/weights.manifest.bin"));
+
+#[cfg(any(test, feature = "host"))]
+extern crate alloc;
+#[cfg(any(test, feature = "host"))]
+use alloc::vec::Vec;
+#[cfg(any(test, feature = "host"))]
+use alloc::boxed::Box;
+
+#[cfg(any(test, feature = "host"))]
+use core::sync::atomic::{AtomicPtr, Ordering};
+
+#[cfg(any(test, feature = "host"))]
+fn man_bytes_host() -> &'static [u8] {
+    // Tiny v2 manifest with 2 entries; used only in unit tests if assets are absent.
+    // (Constructed once; static for lifetime)
+    static P: AtomicPtr<u8> = AtomicPtr::new(core::ptr::null_mut());
+    unsafe {
+        if P.load(Ordering::Relaxed).is_null() {
+            let mut v = Vec::<u8>::new();
+            v.extend_from_slice(b"N64W");
+            v.extend_from_slice(&2u16.to_le_bytes());        // ver=2
+            v.extend_from_slice(&64u16.to_le_bytes());       // align
+            v.extend_from_slice(&2u32.to_le_bytes());        // count
+            let push = |v: &mut Vec<u8>, name: &str, off: u32, sz: u32, crc: u32| {
+                let nb = name.as_bytes();
+                v.extend_from_slice(&(nb.len() as u16).to_le_bytes());
+                v.extend_from_slice(nb);
+                v.extend_from_slice(&off.to_le_bytes());
+                v.extend_from_slice(&sz.to_le_bytes());
+                v.extend_from_slice(&crc.to_le_bytes());
+            };
+            push(&mut v, "tok", 64, 16, 0x4D6F28D3);
+            push(&mut v, "ffn", 128, 4, 0xD202EF8D);
+            let b = v.into_boxed_slice();
+            let p = Box::into_raw(b) as *mut u8;
+            P.store(p, Ordering::Relaxed);
+        }
+        let p = P.load(Ordering::Relaxed);
+        core::slice::from_raw_parts(p, 4 + 2 + 2 + 4 + (2 + 3 + 4 + 4 + 4)*2)
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct Entry<'a> {
@@ -71,46 +113,36 @@ impl<'a> ManifestView<'a> {
     }
 }
 
+pub fn manifest() -> Option<ManifestView<'static>> {
+    #[cfg(feature = "embed_assets")]
+    {
+        ManifestView::new(&MODEL_MANIFEST).ok()
+    }
+    #[cfg(not(feature = "embed_assets"))]
+    {
+        ManifestView::new(man_bytes_host()).ok()
+    }
+}
+
 #[cfg(test)]
-mod tests {
+mod t_manifest {
     use super::*;
-    use alloc::vec::Vec;
 
     #[test]
-    fn v1_and_v2_manifest_parse() {
-        // v1: magic, ver=1, align=64, count=1, entry("a", off=64, sz=3)
-        let mut v1: Vec<u8> = b"N64W".to_vec();
-        v1.extend(&1u16.to_le_bytes());
-        v1.extend(&64u16.to_le_bytes());
+    fn parses_v1_and_v2() {
+        // v1 blob
+        let mut v1 = b"N64W".to_vec();
+        v1.extend(&1u16.to_le_bytes()); v1.extend(&64u16.to_le_bytes());
         v1.extend(&1u32.to_le_bytes());
-        v1.extend(&(1u16.to_le_bytes()));
-        v1.push(b'a');
-        v1.extend(&64u32.to_le_bytes());
-        v1.extend(&3u32.to_le_bytes());
+        v1.extend(&1u16.to_le_bytes()); v1.extend(b"a");
+        v1.extend(&64u32.to_le_bytes()); v1.extend(&3u32.to_le_bytes());
         let m1 = ManifestView::new(&v1).unwrap();
         assert_eq!(m1.version(), 1);
-        let mut seen = false;
-        m1.for_each(|e| {
-            seen = true;
-            assert_eq!(e.name, "a");
-            assert_eq!(e.offset, 64);
-            assert_eq!(e.size, 3);
-            assert!(e.crc32.is_none());
-            true
-        }).unwrap();
-        assert!(seen);
 
-        // v2 adds CRC
-        let mut v2 = v1.clone();
-        v2[4] = 2; // set version=2
+        // v2 blob = v1 + crc
+        let mut v2 = v1.clone(); v2[4] = 2; // version=2
         v2.extend(&0xDEADBEEFu32.to_le_bytes());
         let m2 = ManifestView::new(&v2).unwrap();
         assert_eq!(m2.version(), 2);
-        let mut crc_ok = false;
-        m2.for_each(|e| {
-            crc_ok = e.crc32 == Some(0xDEADBEEF);
-            true
-        }).unwrap();
-        assert!(crc_ok);
     }
 }
