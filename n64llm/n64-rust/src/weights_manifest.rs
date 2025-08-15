@@ -78,10 +78,9 @@ fn rd_u32_le(b: &[u8], i: &mut usize) -> Result<u32, ManErr> {
 
 impl<'a> ManifestView<'a> {
     pub fn new(bytes: &'a [u8]) -> Result<Self, ManErr> {
-        let mut i = 0;
         if bytes.len() < 12 { return Err(ManErr::Truncated); }
         if &bytes[0..4] != b"N64W" { return Err(ManErr::BadMagic); }
-        i = 4;
+        let mut i = 4;
         let ver = rd_u16_le(bytes, &mut i)?;
         if ver != 1 && ver != 2 { return Err(ManErr::BadVersion); }
         let align = rd_u16_le(bytes, &mut i)?;
