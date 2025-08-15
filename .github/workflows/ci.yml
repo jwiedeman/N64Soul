@@ -47,7 +47,7 @@ jobs:
 
       - name: Build N64 ROM (release)
         working-directory: n64llm/n64-rust
-        run: cargo +nightly -Z build-std=core,alloc n64 build --release
+        run: cargo +nightly -Z build-std=core,alloc n64 build --profile release
 
       - name: Scrub ephemerals
         run: |

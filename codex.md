@@ -18,7 +18,7 @@ After these tools are installed, build the Rust project with:
 
 ```bash
 cd n64llm/n64-rust
-cargo +nightly-2022-06-21 n64 build --release
+cargo +nightly-2022-06-21 n64 build --profile release
 ```
 
-This produces a bootable ROM under `target/mips-nintendo64-none/release/` which can be run in an emulator such as `mupen64plus`.
+This produces a bootable ROM under `target/n64/release/` which can be run in an emulator such as `mupen64plus`.
