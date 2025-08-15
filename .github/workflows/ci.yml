@@ -1,9 +1,13 @@
+# yamllint disable rule:line-length
+---
 name: n64soul-ci
 
-on:
-  pull_request:
+'on':
   push:
-    branches: [ main ]
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: ['**']
 
 jobs:
   rust-tests:
@@ -18,7 +22,7 @@ jobs:
 
       - name: Python
         uses: actions/setup-python@v5
-        with: { python-version: '3.11' }
+        with: {python-version: '3.11'}
 
       - name: Deps
         run: |
@@ -41,46 +45,71 @@ jobs:
             --bin n64llm/n64-rust/assets/weights.bin \
             --man n64llm/n64-rust/assets/weights.manifest.bin --crc
 
-      - name: Install cargo-n64 (only on main pushes)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - name: Install cargo-n64 (patched)
         run: bash tools/install_cargo_n64.sh
 
-      - name: Prepare IPL3 (if provided)
-        if: ${{ secrets.N64_IPL3_BASE64 }}
+      # ---------- PRs: build with a dummy IPL3 (no licensed content) ----------
+      - name: Build ROM (PR-safe dummy IPL3)
+        if: ${{ github.event_name == 'pull_request' }}
+        working-directory: n64llm/n64-rust
         run: |
-          echo "$N64_IPL3_BASE64" | base64 -d > ipl3.bin
+          python - <<'PY'
+          # Generate a 4032-byte dummy IPL3 (bootcode region size 0x1000-0x40)
+          with open('ipl3_dummy.bin','wb') as f:
+              f.write(bytes([0])*4032)
+          PY
+          cargo +nightly -Z build-std=core,alloc n64 build --ipl3 ./ipl3_dummy.bin
+          ls -l target/n64/debug || true
+
+      - name: Upload PR ROM artifact (non-bootable)
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: n64-rom-PR-DUMMY
+          path: n64llm/n64-rust/target/n64/debug/*.n64
+          if-no-files-found: warn
+
+      # ---------- Pushes / tags: use real IPL3 from secret ----------
+      - name: Decode IPL3 secret
+        if: ${{ github.event_name != 'pull_request' && secrets.N64_IPL3_BASE64 }}
         env:
           N64_IPL3_BASE64: ${{ secrets.N64_IPL3_BASE64 }}
         working-directory: n64llm/n64-rust
+        run: echo "$N64_IPL3_BASE64" | base64 -d > ipl3.bin
 
-      - name: Prepare donor ROM
-        if: ${{ secrets.N64_DONOR_ROM_BASE64 }}
+      - name: Build ROM (real IPL3)
+        if: ${{ github.event_name != 'pull_request' && secrets.N64_IPL3_BASE64 }}
+        working-directory: n64llm/n64-rust
         run: |
-          echo "$N64_DONOR_ROM_BASE64" | base64 -d > donor.z64
-        env:
-          N64_DONOR_ROM_BASE64: ${{ secrets.N64_DONOR_ROM_BASE64 }}
-        working-directory: n64llm/n64-rust
-
-      - name: Build N64 ROM
-        if: ${{ secrets.N64_IPL3_BASE64 }}
-        working-directory: n64llm/n64-rust
-        run: cargo +nightly -Z build-std=core,alloc n64 build --ipl3 ./ipl3.bin
-
-      - name: Build N64 ROM (extract IPL3)
-        if: ${{ secrets.N64_DONOR_ROM_BASE64 }}
-        working-directory: n64llm/n64-rust
-        run: cargo +nightly -Z build-std=core,alloc n64 build --ipl3-from-rom ./donor.z64
+          cargo +nightly -Z build-std=core,alloc n64 build --ipl3 ./ipl3.bin
+          ls -l target/n64/debug || true
 
       - name: Upload ROM artifact
-        if: ${{ secrets.N64_IPL3_BASE64 || secrets.N64_DONOR_ROM_BASE64 }}
+        if: ${{ github.event_name != 'pull_request' && secrets.N64_IPL3_BASE64 }}
         uses: actions/upload-artifact@v4
         with:
-          name: n64-rom-debug
+          name: n64-rom
           path: n64llm/n64-rust/target/n64/debug/*.n64
+          if-no-files-found: error
 
-      - name: Skip ROM build (no IPL3)
-        if: ${{ !secrets.N64_IPL3_BASE64 && !secrets.N64_DONOR_ROM_BASE64 }}
-        run: echo "No IPL3 secret configured; skipping ROM build step."
+      # Optional: skip message when secret isn't configured on pushes
+      - name: Skip ROM build (no IPL3 secret)
+        if: ${{ github.event_name != 'pull_request' && !secrets.N64_IPL3_BASE64 }}
+        run: echo "N64_IPL3_BASE64 not set; skipping ROM packaging on push."
+
+      # ---------- OPTIONAL: allow *internal* PRs to use real IPL3 ----------
+      # (Uncomment these two steps if you want PRs from branches in THIS repo to use the secret)
+      # - name: Decode IPL3 for internal PRs
+      #   if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && secrets.N64_IPL3_BASE64 }}
+      #   env:
+      #     N64_IPL3_BASE64: ${{ secrets.N64_IPL3_BASE64 }}
+      #   working-directory: n64llm/n64-rust
+      #   run: echo "$N64_IPL3_BASE64" | base64 -d > ipl3.bin
+      #
+      # - name: Build ROM (internal PRs, real IPL3)
+      #   if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && secrets.N64_IPL3_BASE64 }}
+      #   working-directory: n64llm/n64-rust
+      #   run: cargo +nightly -Z build-std=core,alloc n64 build --ipl3 ./ipl3.bin
 
       - name: Scrub ephemerals
         run: |
