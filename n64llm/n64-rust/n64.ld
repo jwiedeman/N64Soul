@@ -28,16 +28,15 @@ SECTIONS
 
     /* Manifest and weights sections */
     __manifest_rom_start = .;
-    .model_manifest ALIGN(64) :
-    {
-      KEEP(*(.model_manifest*))
+    .model_manifest : ALIGN(64) {
+        KEEP(*(.model_manifest))
     } > ROM
     __manifest_rom_end = .;
 
     __weights_rom_start = .;
-    .model_weights ALIGN(64) :
-    {
-         KEEP(*(.model_weights*))
+    .model_weights : ALIGN(64) {
+        KEEP(*(.model_weights))
+        . = ALIGN(64);
     } > ROM
     __weights_rom_end = .;
 

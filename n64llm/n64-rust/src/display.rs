@@ -416,6 +416,14 @@ pub fn keyboard_input(buffer: &mut String) -> bool {
 
 // Display a simple progress indicator while running inference.
 pub fn show_progress(current: usize, total: usize) {
+    const THROTTLE: usize = 4;
+    static mut COUNT: usize = 0;
+    unsafe {
+        COUNT = COUNT.wrapping_add(1);
+        if COUNT % THROTTLE != 0 && current < total {
+            return;
+        }
+    }
     let bar_width = 20;
     let filled = bar_width * current / total;
     let mut bar = String::new();
