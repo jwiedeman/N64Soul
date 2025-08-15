@@ -41,7 +41,8 @@ jobs:
             --bin n64llm/n64-rust/assets/weights.bin \
             --man n64llm/n64-rust/assets/weights.manifest.bin --crc
 
-      - name: Install cargo-n64 (pinned)
+      - name: Install cargo-n64 (only on main pushes)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: bash tools/install_cargo_n64.sh
 
       - name: Build N64 ROM (release)
