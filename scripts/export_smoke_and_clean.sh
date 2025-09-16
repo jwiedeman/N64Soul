@@ -11,7 +11,7 @@ if [[ "$MODE" == "real" ]]; then
   # Example: keep last 8 blocks of gpt2-medium as fp16 (tweak as needed)
   python tools/export_gpt2_n64.py --model gpt2-medium --dtype fp16 --keep-layers 8 --out-dir "$ASSETS"
 else
-  python tools/make_debug_weights.py --out-dir "$ASSETS" --chunks 8 --chunkKB 64
+  python tools/make_debug_weights.py --out-bin "$BIN" --out-man "$MAN"
 fi
 
 # 1) Validate

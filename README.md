@@ -52,8 +52,10 @@ A custom toolchain is required. Build with nightly and package the resulting ELF
 
 ```bash
 cd n64llm/n64-rust
-cargo +nightly -Z build-std=core,alloc n64 build --profile release
+cargo +nightly -Z build-std=core,alloc n64 build --profile release --features embed_assets
 ```
+
+The `embed_assets` feature bundles the manifest and weights into the ROM image.
 
 This produces a bootable Nintendo&nbsp;64 ROM named `n64_gpt.z64` in the current
 directory. The linker and configuration reserve up to roughly 1&nbsp;GiB of cart
