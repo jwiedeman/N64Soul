@@ -4,8 +4,10 @@ use crate::memory_manager::MemoryManager;
 use crate::model::names;
 use crate::n64_math;
 use crate::{platform::pi, weights};
+use alloc::collections::BTreeMap;
 use alloc::vec;
 use alloc::vec::Vec;
+use core::cmp;
 use core::fmt;
 use core::result::Result;
 
@@ -28,434 +30,645 @@ impl fmt::Display for Error {
     }
 }
 
-const MAX_SEQ_LENGTH: usize = 128; // Reduced max sequence length
+const MAX_SEQ_LENGTH: usize = 128;
+const LAYER_NORM_EPS: f32 = 1e-5;
 
 pub struct ModelState<'a> {
-    current_layer_weights: Vec<f32>,
-    hidden_states: Vec<f32>,
     memory_manager: &'a mut MemoryManager,
-    last_checkpoint: Option<usize>,
     manifest: &'a manifest::Manifest,
     dims: crate::model::dims::ModelDims,
     plan: LayerPlan,
+    hidden_states: Vec<f32>,
+    residual: Vec<f32>,
+    normed: Vec<f32>,
+    attn_output: Vec<f32>,
+    ffn_hidden: Vec<f32>,
+    ffn_mid: Vec<f32>,
+    weights_a: Vec<f32>,
+    weights_b: Vec<f32>,
+    bias_a: Vec<f32>,
+    bias_b: Vec<f32>,
+    qkv_buffer: Vec<f32>,
+    scores: Vec<f32>,
+    token_row: Vec<f32>,
+    dma_buffer: Vec<u8>,
 }
 
 impl<'a> ModelState<'a> {
     pub fn new(memory_manager: &'a mut MemoryManager, manifest: &'a manifest::Manifest) -> Self {
         let dims = manifest.dims;
-        let hidden_states = Vec::with_capacity(MAX_SEQ_LENGTH * dims.d_model as usize);
         let plan = LayerPlan::from_manifest(manifest);
         ModelState {
-            current_layer_weights: Vec::new(),
-            hidden_states,
             memory_manager,
-            last_checkpoint: None,
             manifest,
             dims,
             plan,
+            hidden_states: Vec::new(),
+            residual: Vec::new(),
+            normed: Vec::new(),
+            attn_output: Vec::new(),
+            ffn_hidden: Vec::new(),
+            ffn_mid: Vec::new(),
+            weights_a: Vec::new(),
+            weights_b: Vec::new(),
+            bias_a: Vec::new(),
+            bias_b: Vec::new(),
+            qkv_buffer: Vec::new(),
+            scores: Vec::new(),
+            token_row: Vec::new(),
+            dma_buffer: Vec::new(),
         }
     }
 
-    pub fn load_layer_weights(&mut self, layer_idx: usize) -> Result<(), Error> {
-        if layer_idx >= self.manifest.layers.len() {
-            return Err(Error::MemoryError);
+    pub fn run_inference(&mut self, input_tokens: &[u32]) -> Result<Vec<u32>, Error> {
+        if input_tokens.is_empty() || input_tokens.len() > MAX_SEQ_LENGTH {
+            return Err(Error::ComputationError);
         }
 
-        // Create a checkpoint so the weights can be freed after use
-        let cp = self.memory_manager.checkpoint();
-        self.last_checkpoint = Some(cp);
+        let hidden_size = self.dims.d_model as usize;
+        let seq_len = input_tokens.len();
+        self.ensure_vec(&mut self.hidden_states, seq_len * hidden_size);
+        self.ensure_vec(&mut self.residual, seq_len * hidden_size);
+        self.ensure_vec(&mut self.normed, seq_len * hidden_size);
+        self.ensure_vec(&mut self.attn_output, seq_len * hidden_size);
+        self.ensure_vec(&mut self.ffn_hidden, seq_len * hidden_size);
 
-        let layer = &self.manifest.layers[layer_idx];
-        let offset = layer.offset;
-        let size = layer.size as usize;
+        display::show_progress(0, self.plan.layers.len() + 2);
+        self.apply_embeddings(input_tokens)?;
 
-        self.current_layer_weights = Vec::with_capacity(size / 4); // 4 bytes per f32
+        for (idx, layer) in self.plan.layers.iter().enumerate() {
+            display::show_progress(idx + 1, self.plan.layers.len() + 2);
+            self.process_layer(layer, seq_len, hidden_size)?;
+            self.memory_manager.log_usage("layer");
+        }
 
-        self.read_from_rom(offset, size)?;
+        self.apply_final_norm(hidden_size)?;
+        display::show_progress(self.plan.layers.len() + 1, self.plan.layers.len() + 2);
+        let output_tokens = self.generate_output(seq_len, hidden_size)?;
+        display::show_progress(self.plan.layers.len() + 2, self.plan.layers.len() + 2);
+        Ok(output_tokens)
+    }
+
+    fn process_layer(
+        &mut self,
+        layer: &LayerSpec,
+        seq_len: usize,
+        hidden_size: usize,
+    ) -> Result<(), Error> {
+        self.residual.copy_from_slice(&self.hidden_states);
+
+        self.load_layer_f32_into(layer.ln1_weight, &mut self.weights_a)?;
+        self.load_layer_f32_into(layer.ln1_bias, &mut self.bias_a)?;
+        self.layer_norm(
+            &self.hidden_states,
+            &self.weights_a,
+            &self.bias_a,
+            hidden_size,
+            &mut self.normed,
+        )?;
+
+        self.load_layer_f32_into(layer.attn_weight, &mut self.weights_a)?;
+        self.load_layer_f32_into(layer.attn_bias, &mut self.bias_a)?;
+        self.load_layer_f32_into(layer.attn_proj_weight, &mut self.weights_b)?;
+        self.load_layer_f32_into(layer.attn_proj_bias, &mut self.bias_b)?;
+        self.apply_attention(seq_len, hidden_size)?;
+
+        for i in 0..self.hidden_states.len() {
+            self.hidden_states[i] = self.attn_output[i] + self.residual[i];
+        }
+
+        self.residual.copy_from_slice(&self.hidden_states);
+
+        self.load_layer_f32_into(layer.ln2_weight, &mut self.weights_a)?;
+        self.load_layer_f32_into(layer.ln2_bias, &mut self.bias_a)?;
+        self.layer_norm(
+            &self.hidden_states,
+            &self.weights_a,
+            &self.bias_a,
+            hidden_size,
+            &mut self.normed,
+        )?;
+
+        self.load_layer_f32_into(layer.ffn_weight, &mut self.weights_a)?;
+        self.load_layer_f32_into(layer.ffn_bias, &mut self.bias_a)?;
+        self.load_layer_f32_into(layer.ffn_proj_weight, &mut self.weights_b)?;
+        self.load_layer_f32_into(layer.ffn_proj_bias, &mut self.bias_b)?;
+        self.apply_ffn(seq_len, hidden_size)?;
+
+        for i in 0..self.hidden_states.len() {
+            self.hidden_states[i] = self.ffn_hidden[i] + self.residual[i];
+        }
 
         Ok(())
     }
 
-    fn unload_layer_weights(&mut self) {
-        if let Some(_cp) = self.last_checkpoint {
-            self.memory_manager.pop_checkpoint();
-            self.last_checkpoint = None;
-        }
-        self.current_layer_weights.clear();
-    }
+    fn apply_embeddings(&mut self, input_tokens: &[u32]) -> Result<(), Error> {
+        let embedding_idx = self
+            .plan
+            .embedding
+            .ok_or(Error::MissingLayer(names::L_TOK_EMB))?;
+        let pos_idx = self
+            .plan
+            .positional
+            .ok_or(Error::MissingLayer(names::L_POS_EMB))?;
 
-    /// Read `size` bytes from ROM at (weights base + offset) using DMA and
-    /// convert the bytes into f32 values.
-    fn read_from_rom(&mut self, offset: u32, size: usize) -> Result<(), Error> {
-        // Allocate temporary buffer for DMA read.
-        let buffer_ptr = match self.memory_manager.alloc(size, 4) {
-            Some(ptr) => ptr.as_ptr(),
-            None => return Err(Error::MemoryError),
-        };
+        let hidden_size = self.dims.d_model as usize;
+        let seq_len = input_tokens.len();
+        self.ensure_vec(&mut self.token_row, hidden_size);
 
-        // Perform DMA read via platform PI layer
-        let cart_off = weights::weights_rel_to_cart_off(offset as u64);
-        let buf = unsafe { core::slice::from_raw_parts_mut(buffer_ptr, size) };
-        pi::pi_dma_read(cart_off, buf).map_err(|_| Error::RomReadError)?;
-        // Now convert the DMA buffer into f32 values.
-        let data = unsafe { core::slice::from_raw_parts(buffer_ptr, size) };
-        for chunk in data.chunks(4) {
-            if chunk.len() == 4 {
-                let value = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                self.current_layer_weights.push(value);
+        for (pos, &token) in input_tokens.iter().enumerate() {
+            if token >= self.dims.vocab_size {
+                return Err(Error::ComputationError);
+            }
+            self.read_matrix_row(embedding_idx, token, &mut self.token_row)?;
+            let start = pos * hidden_size;
+            self.hidden_states[start..start + hidden_size].copy_from_slice(&self.token_row);
+
+            let pos_id = cmp::min(pos as u32, self.dims.n_positions.saturating_sub(1));
+            self.read_matrix_row(pos_idx, pos_id, &mut self.token_row)?;
+            for i in 0..hidden_size {
+                self.hidden_states[start + i] += self.token_row[i];
             }
         }
 
         Ok(())
     }
 
-    pub fn run_inference(&mut self, input_tokens: &[u32]) -> Result<Vec<u32>, Error> {
-        let total_steps = self.plan.layers.len() + 1;
-        display::show_progress(0, total_steps);
+    fn apply_attention(&mut self, seq_len: usize, hidden_size: usize) -> Result<(), Error> {
+        let n_heads = self.dims.n_head as usize;
+        if n_heads == 0 || hidden_size % n_heads != 0 {
+            return Err(Error::ComputationError);
+        }
+        let head_dim = hidden_size / n_heads;
+        let three_hidden = hidden_size * 3;
 
-        let embedding_idx = self
-            .plan
-            .embedding
-            .ok_or(Error::MissingLayer(names::L_TOK_EMB))?;
-
-        self.load_layer_weights(embedding_idx)?;
-        self.memory_manager.log_usage("embed_load");
-        self.apply_embeddings(input_tokens)?;
-        self.memory_manager.log_usage("embed_apply");
-        self.unload_layer_weights();
-        self.memory_manager.log_usage("embed_unload");
-
-        for (idx, pair) in self.plan.layers.iter().enumerate() {
-            self.load_layer_weights(pair.attn_idx)?;
-            self.memory_manager.log_usage("attn_load");
-            self.apply_attention()?;
-            self.memory_manager.log_usage("attn_apply");
-            self.unload_layer_weights();
-            self.memory_manager.log_usage("attn_unload");
-
-            self.load_layer_weights(pair.ffn_idx)?;
-            self.memory_manager.log_usage("ffn_load");
-            self.apply_ffn()?;
-            self.memory_manager.log_usage("ffn_apply");
-            self.unload_layer_weights();
-            self.memory_manager.log_usage("ffn_unload");
-
-            display::show_progress(idx + 1, total_steps);
+        if self.weights_a.len() != hidden_size * three_hidden
+            || self.bias_a.len() != three_hidden
+            || self.weights_b.len() != hidden_size * hidden_size
+            || self.bias_b.len() != hidden_size
+        {
+            return Err(Error::ComputationError);
         }
 
+        self.ensure_vec(&mut self.qkv_buffer, seq_len * three_hidden);
+        self.ensure_vec(&mut self.attn_output, seq_len * hidden_size);
+        for val in self.attn_output.iter_mut() {
+            *val = 0.0;
+        }
+        self.ensure_vec(&mut self.scores, seq_len);
+
+        for t in 0..seq_len {
+            for out_idx in 0..three_hidden {
+                let mut sum = self.bias_a[out_idx];
+                for i in 0..hidden_size {
+                    sum += self.normed[t * hidden_size + i]
+                        * self.weights_a[i * three_hidden + out_idx];
+                }
+                self.qkv_buffer[t * three_hidden + out_idx] = sum;
+            }
+        }
+
+        for head in 0..n_heads {
+            for t in 0..seq_len {
+                for s in 0..seq_len {
+                    let mut dot = 0.0f32;
+                    for i in 0..head_dim {
+                        let q = self.qkv_buffer[t * three_hidden + head * head_dim + i];
+                        let k =
+                            self.qkv_buffer[s * three_hidden + hidden_size + head * head_dim + i];
+                        dot += q * k;
+                    }
+                    self.scores[s] = dot / n64_math::sqrt(head_dim as f32);
+                }
+                let mut max_score = f32::NEG_INFINITY;
+                for &v in &self.scores {
+                    if v > max_score {
+                        max_score = v;
+                    }
+                }
+                let mut sum = 0.0f32;
+                for val in self.scores.iter_mut() {
+                    *val = n64_math::exp_approx(*val - max_score);
+                    sum += *val;
+                }
+                if sum == 0.0 {
+                    return Err(Error::ComputationError);
+                }
+                for s in 0..seq_len {
+                    let weight = self.scores[s] / sum;
+                    for i in 0..head_dim {
+                        let v = self.qkv_buffer
+                            [s * three_hidden + 2 * hidden_size + head * head_dim + i];
+                        self.attn_output[t * hidden_size + head * head_dim + i] += weight * v;
+                    }
+                }
+            }
+        }
+
+        for t in 0..seq_len {
+            for out_idx in 0..hidden_size {
+                let mut sum = self.bias_b[out_idx];
+                for i in 0..hidden_size {
+                    sum += self.attn_output[t * hidden_size + i]
+                        * self.weights_b[i * hidden_size + out_idx];
+                }
+                self.attn_output[t * hidden_size + out_idx] = sum;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn apply_ffn(&mut self, seq_len: usize, hidden_size: usize) -> Result<(), Error> {
+        let d_ff = self.dims.d_ff as usize;
+        if d_ff == 0 {
+            return Err(Error::ComputationError);
+        }
+        if self.weights_a.len() != hidden_size * d_ff
+            || self.bias_a.len() != d_ff
+            || self.weights_b.len() != d_ff * hidden_size
+            || self.bias_b.len() != hidden_size
+        {
+            return Err(Error::ComputationError);
+        }
+
+        self.ensure_vec(&mut self.ffn_mid, seq_len * d_ff);
+        self.ensure_vec(&mut self.ffn_hidden, seq_len * hidden_size);
+
+        for t in 0..seq_len {
+            for out_idx in 0..d_ff {
+                let mut sum = self.bias_a[out_idx];
+                for i in 0..hidden_size {
+                    sum += self.normed[t * hidden_size + i] * self.weights_a[i * d_ff + out_idx];
+                }
+                self.ffn_mid[t * d_ff + out_idx] = gelu(sum);
+            }
+        }
+
+        for t in 0..seq_len {
+            for out_idx in 0..hidden_size {
+                let mut sum = self.bias_b[out_idx];
+                for i in 0..d_ff {
+                    sum += self.ffn_mid[t * d_ff + i] * self.weights_b[i * hidden_size + out_idx];
+                }
+                self.ffn_hidden[t * hidden_size + out_idx] = sum;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn apply_final_norm(&mut self, hidden_size: usize) -> Result<(), Error> {
+        let weight_idx = self
+            .plan
+            .final_norm_weight
+            .ok_or(Error::MissingLayer(names::L_FINAL_NORM_WEIGHT))?;
+        let bias_idx = self
+            .plan
+            .final_norm_bias
+            .ok_or(Error::MissingLayer(names::L_FINAL_NORM_BIAS))?;
+
+        self.load_layer_f32_into(weight_idx, &mut self.weights_a)?;
+        self.load_layer_f32_into(bias_idx, &mut self.bias_a)?;
+        self.layer_norm(
+            &self.hidden_states,
+            &self.weights_a,
+            &self.bias_a,
+            hidden_size,
+            &mut self.normed,
+        )?;
+        self.hidden_states.copy_from_slice(&self.normed);
+
+        // Keep buffers sized for downstream output projection.
+        self.ensure_vec(&mut self.scores, self.dims.vocab_size as usize);
+        self.ensure_vec(&mut self.token_row, hidden_size);
+
+        Ok(())
+    }
+
+    fn generate_output(&mut self, seq_len: usize, hidden_size: usize) -> Result<Vec<u32>, Error> {
+        if seq_len == 0 {
+            return Err(Error::ComputationError);
+        }
         let output_idx = self
             .plan
             .output
             .ok_or(Error::MissingLayer(names::L_LM_HEAD))?;
 
-        self.load_layer_weights(output_idx)?;
-        self.memory_manager.log_usage("out_load");
-        let output_tokens = self.generate_output()?;
-        self.unload_layer_weights();
-        self.memory_manager.log_usage("out_unload");
-        display::show_progress(total_steps, total_steps);
-        Ok(output_tokens)
-    }
-
-    fn apply_embeddings(&mut self, input_tokens: &[u32]) -> Result<(), Error> {
-        self.hidden_states.clear();
-        let hidden_size = self.dims.d_model as usize;
         let vocab_size = self.dims.vocab_size as usize;
-        for &token in input_tokens {
-            if token as usize >= vocab_size {
-                return Err(Error::ComputationError);
-            }
+        self.ensure_vec(&mut self.scores, vocab_size);
+        let last_offset = (seq_len - 1) * hidden_size;
+        let last_hidden = &self.hidden_states[last_offset..last_offset + hidden_size];
 
-            let embed_offset = token as usize * hidden_size;
-            if embed_offset + hidden_size > self.current_layer_weights.len() {
-                return Err(Error::MemoryError);
-            }
-
-            for i in 0..hidden_size {
-                self.hidden_states
-                    .push(self.current_layer_weights[embed_offset + i]);
-            }
-        }
-
-        Ok(())
-    }
-
-    fn apply_attention(&mut self) -> Result<(), Error> {
-        let hidden_size = self.dims.d_model as usize;
-        let seq_len = self.hidden_states.len() / hidden_size;
-        let mat_size = hidden_size * hidden_size;
-
-        // Ensure we have enough weights for a single-head attention layer
-        if self.current_layer_weights.len() < mat_size * 4 {
-            return Err(Error::MemoryError);
-        }
-
-        let (q_w, rest) = self.current_layer_weights.split_at(mat_size);
-        let (k_w, rest) = rest.split_at(mat_size);
-        let (v_w, o_w) = rest.split_at(mat_size);
-
-        let mut q = vec![0.0f32; seq_len * hidden_size];
-        let mut k = vec![0.0f32; seq_len * hidden_size];
-        let mut v = vec![0.0f32; seq_len * hidden_size];
-
-        // Linear projections for Q, K, V
-        for t in 0..seq_len {
-            for h in 0..hidden_size {
-                let mut q_sum = 0.0;
-                let mut k_sum = 0.0;
-                let mut v_sum = 0.0;
-                for i in 0..hidden_size {
-                    let x = self.hidden_states[t * hidden_size + i];
-                    q_sum += x * q_w[h * hidden_size + i];
-                    k_sum += x * k_w[h * hidden_size + i];
-                    v_sum += x * v_w[h * hidden_size + i];
-                }
-                q[t * hidden_size + h] = q_sum;
-                k[t * hidden_size + h] = k_sum;
-                v[t * hidden_size + h] = v_sum;
-            }
-        }
-
-        let mut attended = vec![0.0f32; seq_len * hidden_size];
-        let scale = n64_math::sqrt(hidden_size as f32);
-
-        for t in 0..seq_len {
-            let mut scores = vec![0.0f32; seq_len];
+        for token_id in 0..vocab_size {
+            self.read_matrix_row(output_idx, token_id as u32, &mut self.token_row)?;
             let mut sum = 0.0f32;
-            for s in 0..seq_len {
-                let mut dot = 0.0;
-                for h in 0..hidden_size {
-                    dot += q[t * hidden_size + h] * k[s * hidden_size + h];
-                }
-                let score = n64_math::exp_approx(dot / scale);
-                scores[s] = score;
-                sum += score;
+            for i in 0..hidden_size {
+                sum += self.token_row[i] * last_hidden[i];
             }
-
-            for s in 0..seq_len {
-                let weight = scores[s] / sum;
-                for h in 0..hidden_size {
-                    attended[t * hidden_size + h] += weight * v[s * hidden_size + h];
-                }
-            }
+            self.scores[token_id] = sum;
         }
 
-        let mut new_states = vec![0.0f32; seq_len * hidden_size];
-        for t in 0..seq_len {
-            for h in 0..hidden_size {
-                let mut sum = 0.0;
-                for i in 0..hidden_size {
-                    sum += attended[t * hidden_size + i] * o_w[h * hidden_size + i];
-                }
-                new_states[t * hidden_size + h] = sum;
+        let mut max_logit = f32::NEG_INFINITY;
+        for &v in &self.scores {
+            if v > max_logit {
+                max_logit = v;
             }
         }
-
-        self.hidden_states = new_states;
-        Ok(())
-    }
-
-    fn apply_ffn(&mut self) -> Result<(), Error> {
-        let hidden_size = self.dims.d_model as usize;
-        let seq_len = self.hidden_states.len() / hidden_size;
-        let mat_size = hidden_size * hidden_size;
-
-        if self.current_layer_weights.len() < mat_size * 2 {
-            return Err(Error::MemoryError);
+        let mut total = 0.0f32;
+        for val in self.scores.iter_mut() {
+            *val = n64_math::exp_approx(*val - max_logit);
+            total += *val;
         }
-
-        let (w1, w2) = self.current_layer_weights.split_at(mat_size);
-
-        let mut hidden = vec![0.0f32; seq_len * hidden_size];
-        for t in 0..seq_len {
-            for h in 0..hidden_size {
-                let mut sum = 0.0;
-                for i in 0..hidden_size {
-                    sum += self.hidden_states[t * hidden_size + i] * w1[h * hidden_size + i];
-                }
-                hidden[t * hidden_size + h] = if sum > 0.0 { sum } else { 0.0 };
-            }
-        }
-
-        let mut output = vec![0.0f32; seq_len * hidden_size];
-        for t in 0..seq_len {
-            for h in 0..hidden_size {
-                let mut sum = 0.0;
-                for i in 0..hidden_size {
-                    sum += hidden[t * hidden_size + i] * w2[h * hidden_size + i];
-                }
-                output[t * hidden_size + h] = sum;
-            }
-        }
-
-        self.hidden_states = output;
-        Ok(())
-    }
-
-    fn generate_output(&self) -> Result<Vec<u32>, Error> {
-        let hidden_size = self.dims.d_model as usize;
-        let vocab_size = self.dims.vocab_size as usize;
-        let seq_len = self.hidden_states.len() / hidden_size;
-        if seq_len == 0 {
+        if total == 0.0 {
             return Err(Error::ComputationError);
         }
 
-        let last_pos = (seq_len - 1) * hidden_size;
-        let mut logits = Vec::with_capacity(vocab_size);
-
-        for v in 0..vocab_size {
-            let mut logit = 0.0;
-            for h in 0..hidden_size {
-                if h < self.hidden_states.len() - last_pos {
-                    let weight_idx = v * hidden_size + h;
-                    if weight_idx < self.current_layer_weights.len() {
-                        logit += self.hidden_states[last_pos + h]
-                            * self.current_layer_weights[weight_idx];
-                    }
-                }
-            }
-            logits.push(logit);
-        }
-
-        let mut max_idx = 0;
-        let mut max_val = f32::MIN;
-        for (i, &logit) in logits.iter().enumerate() {
-            if logit > max_val {
-                max_val = logit;
-                max_idx = i;
+        let mut best_idx = 0usize;
+        let mut best_prob = -1.0f32;
+        for (idx, prob) in self.scores.iter_mut().enumerate() {
+            *prob /= total;
+            if *prob > best_prob {
+                best_prob = *prob;
+                best_idx = idx;
             }
         }
 
-        Ok(vec![max_idx as u32])
+        Ok(vec![best_idx as u32])
+    }
+
+    fn layer_norm(
+        &mut self,
+        input: &[f32],
+        gamma: &[f32],
+        beta: &[f32],
+        hidden_size: usize,
+        out: &mut Vec<f32>,
+    ) -> Result<(), Error> {
+        if gamma.len() != hidden_size || beta.len() != hidden_size {
+            return Err(Error::ComputationError);
+        }
+        if input.len() % hidden_size != 0 {
+            return Err(Error::ComputationError);
+        }
+        let seq_len = input.len() / hidden_size;
+        out.resize(input.len(), 0.0);
+
+        for t in 0..seq_len {
+            let start = t * hidden_size;
+            let slice = &input[start..start + hidden_size];
+            let mut mean = 0.0f32;
+            for &x in slice {
+                mean += x;
+            }
+            mean /= hidden_size as f32;
+            let mut var = 0.0f32;
+            for &x in slice {
+                let diff = x - mean;
+                var += diff * diff;
+            }
+            var /= hidden_size as f32;
+            let inv_std = 1.0f32 / n64_math::sqrt(var + LAYER_NORM_EPS);
+            for i in 0..hidden_size {
+                let norm = (slice[i] - mean) * inv_std;
+                out[start + i] = norm * gamma[i] + beta[i];
+            }
+        }
+
+        Ok(())
+    }
+
+    fn load_layer_f32_into(&mut self, idx: usize, out: &mut Vec<f32>) -> Result<(), Error> {
+        let bytes = self.read_entry_bytes(idx)?;
+        if bytes.len() % 4 != 0 {
+            return Err(Error::ComputationError);
+        }
+        let count = bytes.len() / 4;
+        out.resize(count, 0.0);
+        for (i, chunk) in bytes.chunks_exact(4).enumerate() {
+            out[i] = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+        }
+        Ok(())
+    }
+
+    fn read_entry_bytes(&mut self, idx: usize) -> Result<&[u8], Error> {
+        let layer = self.manifest.layers.get(idx).ok_or(Error::MemoryError)?;
+        let size = layer.size as usize;
+        self.dma_buffer.resize(size, 0);
+        let cart_off = weights::weights_rel_to_cart_off(layer.offset as u64);
+        pi::pi_dma_read(cart_off, &mut self.dma_buffer).map_err(|_| Error::RomReadError)?;
+        Ok(&self.dma_buffer)
+    }
+
+    fn read_matrix_row(&mut self, idx: usize, row: u32, out: &mut Vec<f32>) -> Result<(), Error> {
+        let layer = self.manifest.layers.get(idx).ok_or(Error::MemoryError)?;
+        let hidden_size = self.dims.d_model as usize;
+        let row_bytes = hidden_size * 4;
+        if row_bytes == 0 || layer.size as usize % row_bytes != 0 {
+            return Err(Error::ComputationError);
+        }
+        let rows = layer.size as usize / row_bytes;
+        if row as usize >= rows {
+            return Err(Error::ComputationError);
+        }
+        self.dma_buffer.resize(row_bytes, 0);
+        let offset = layer.offset as u64 + (row as u64) * row_bytes as u64;
+        let cart_off = weights::weights_rel_to_cart_off(offset);
+        pi::pi_dma_read(cart_off, &mut self.dma_buffer).map_err(|_| Error::RomReadError)?;
+        out.resize(hidden_size, 0.0);
+        for (i, chunk) in self.dma_buffer.chunks_exact(4).enumerate() {
+            out[i] = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+        }
+        Ok(())
+    }
+
+    fn ensure_vec(&mut self, vec: &mut Vec<f32>, len: usize) {
+        if vec.len() != len {
+            vec.resize(len, 0.0);
+        }
     }
 }
 
-struct LayerPair {
-    attn_idx: usize,
-    ffn_idx: usize,
+fn gelu(x: f32) -> f32 {
+    let c = 0.7978845608f32; // sqrt(2/pi)
+    let inner = c * (x + 0.044_715f32 * x * x * x);
+    let e2x = n64_math::exp_approx(2.0 * inner);
+    let tanh = (e2x - 1.0) / (e2x + 1.0);
+    0.5f32 * x * (1.0 + tanh)
+}
+
+struct LayerSpec {
+    ln1_weight: usize,
+    ln1_bias: usize,
+    attn_weight: usize,
+    attn_bias: usize,
+    attn_proj_weight: usize,
+    attn_proj_bias: usize,
+    ln2_weight: usize,
+    ln2_bias: usize,
+    ffn_weight: usize,
+    ffn_bias: usize,
+    ffn_proj_weight: usize,
+    ffn_proj_bias: usize,
 }
 
 struct LayerPlan {
     embedding: Option<usize>,
+    positional: Option<usize>,
     output: Option<usize>,
-    layers: Vec<LayerPair>,
+    final_norm_weight: Option<usize>,
+    final_norm_bias: Option<usize>,
+    layers: Vec<LayerSpec>,
 }
 
 impl LayerPlan {
     fn from_manifest(manifest: &manifest::Manifest) -> Self {
         let mut embedding = None;
+        let mut positional = None;
         let mut output = None;
-        let mut attn: Vec<(usize, usize)> = Vec::new();
-        let mut ffn: Vec<(usize, usize)> = Vec::new();
-        let mut attn_fallback = 0usize;
-        let mut ffn_fallback = 0usize;
+        let mut final_norm_weight = None;
+        let mut final_norm_bias = None;
+        let mut layer_map: BTreeMap<usize, PartialLayer> = BTreeMap::new();
 
         for (idx, layer) in manifest.layers.iter().enumerate() {
-            let name = layer.name.as_str();
-            if embedding.is_none() && is_embedding_layer(name) {
-                embedding = Some(idx);
-                continue;
-            }
-            if output.is_none() && is_output_layer(name) {
-                output = Some(idx);
-                continue;
-            }
-            if is_attention_layer(name) {
-                let order = parse_layer_index(name).unwrap_or_else(|| {
-                    let v = fallback_order(attn_fallback);
-                    attn_fallback += 1;
-                    v
-                });
-                attn.push((order, idx));
-                continue;
-            }
-            if is_ffn_layer(name) {
-                let order = parse_layer_index(name).unwrap_or_else(|| {
-                    let v = fallback_order(ffn_fallback);
-                    ffn_fallback += 1;
-                    v
-                });
-                ffn.push((order, idx));
+            match layer.name.as_str() {
+                names::L_TOK_EMB => embedding = Some(idx),
+                names::L_POS_EMB => positional = Some(idx),
+                names::L_LM_HEAD => output = Some(idx),
+                names::L_FINAL_NORM_WEIGHT => final_norm_weight = Some(idx),
+                names::L_FINAL_NORM_BIAS => final_norm_bias = Some(idx),
+                _ => {
+                    if let Some((layer_idx, field)) = parse_layer_entry(&layer.name) {
+                        layer_map
+                            .entry(layer_idx)
+                            .or_insert_with(PartialLayer::default)
+                            .set(field, idx);
+                    }
+                }
             }
         }
 
-        attn.sort_by_key(|(order, _)| *order);
-        ffn.sort_by_key(|(order, _)| *order);
         let mut layers = Vec::new();
-        for (a, f) in attn.into_iter().zip(ffn.into_iter()) {
-            layers.push(LayerPair {
-                attn_idx: a.1,
-                ffn_idx: f.1,
-            });
+        for (_, partial) in layer_map.into_iter() {
+            if let Some(spec) = partial.into_spec() {
+                layers.push(spec);
+            }
         }
 
         LayerPlan {
             embedding,
+            positional,
             output,
+            final_norm_weight,
+            final_norm_bias,
             layers,
         }
     }
 }
 
-fn fallback_order(fallback: usize) -> usize {
-    0x1000 + fallback
+#[derive(Default)]
+struct PartialLayer {
+    ln1_weight: Option<usize>,
+    ln1_bias: Option<usize>,
+    attn_weight: Option<usize>,
+    attn_bias: Option<usize>,
+    attn_proj_weight: Option<usize>,
+    attn_proj_bias: Option<usize>,
+    ln2_weight: Option<usize>,
+    ln2_bias: Option<usize>,
+    ffn_weight: Option<usize>,
+    ffn_bias: Option<usize>,
+    ffn_proj_weight: Option<usize>,
+    ffn_proj_bias: Option<usize>,
 }
 
-fn is_embedding_layer(name: &str) -> bool {
-    name == names::L_TOK_EMB || name.contains("tok_emb")
-}
-
-fn is_output_layer(name: &str) -> bool {
-    name == names::L_LM_HEAD || name.ends_with("lm_head")
-}
-
-fn is_attention_layer(name: &str) -> bool {
-    name.contains("attn") || name.contains("attention")
-}
-
-fn is_ffn_layer(name: &str) -> bool {
-    name.contains("ffn") || name.contains("mlp") || name.contains("feed_forward")
-}
-
-fn parse_layer_index(name: &str) -> Option<usize> {
-    if let Some(pos) = name.find(".h.") {
-        let mut value: usize = 0;
-        let mut found = false;
-        for ch in name[pos + 3..].chars() {
-            if ch.is_ascii_digit() {
-                found = true;
-                value = value * 10 + (ch as u8 - b'0') as usize;
-            } else {
-                break;
-            }
-        }
-        if found {
-            return Some(value);
+impl PartialLayer {
+    fn set(&mut self, field: LayerField, idx: usize) {
+        match field {
+            LayerField::Ln1Weight => self.ln1_weight = Some(idx),
+            LayerField::Ln1Bias => self.ln1_bias = Some(idx),
+            LayerField::AttnWeight => self.attn_weight = Some(idx),
+            LayerField::AttnBias => self.attn_bias = Some(idx),
+            LayerField::AttnProjWeight => self.attn_proj_weight = Some(idx),
+            LayerField::AttnProjBias => self.attn_proj_bias = Some(idx),
+            LayerField::Ln2Weight => self.ln2_weight = Some(idx),
+            LayerField::Ln2Bias => self.ln2_bias = Some(idx),
+            LayerField::FfnWeight => self.ffn_weight = Some(idx),
+            LayerField::FfnBias => self.ffn_bias = Some(idx),
+            LayerField::FfnProjWeight => self.ffn_proj_weight = Some(idx),
+            LayerField::FfnProjBias => self.ffn_proj_bias = Some(idx),
         }
     }
-    if let Some(pos) = name.find("layer") {
-        let mut idx = pos + 5;
-        let bytes = name.as_bytes();
-        if idx < bytes.len() && (bytes[idx] == b'_' || bytes[idx] == b'.') {
-            idx += 1;
-        }
-        let mut value: usize = 0;
-        let mut found = false;
-        while idx < bytes.len() {
-            let b = bytes[idx];
-            if b.is_ascii_digit() {
-                found = true;
-                value = value * 10 + (b - b'0') as usize;
-                idx += 1;
-            } else {
-                break;
-            }
-        }
-        if found {
-            return Some(value);
-        }
+
+    fn into_spec(self) -> Option<LayerSpec> {
+        Some(LayerSpec {
+            ln1_weight: self.ln1_weight?,
+            ln1_bias: self.ln1_bias?,
+            attn_weight: self.attn_weight?,
+            attn_bias: self.attn_bias?,
+            attn_proj_weight: self.attn_proj_weight?,
+            attn_proj_bias: self.attn_proj_bias?,
+            ln2_weight: self.ln2_weight?,
+            ln2_bias: self.ln2_bias?,
+            ffn_weight: self.ffn_weight?,
+            ffn_bias: self.ffn_bias?,
+            ffn_proj_weight: self.ffn_proj_weight?,
+            ffn_proj_bias: self.ffn_proj_bias?,
+        })
     }
-    None
+}
+
+#[derive(Copy, Clone)]
+enum LayerField {
+    Ln1Weight,
+    Ln1Bias,
+    AttnWeight,
+    AttnBias,
+    AttnProjWeight,
+    AttnProjBias,
+    Ln2Weight,
+    Ln2Bias,
+    FfnWeight,
+    FfnBias,
+    FfnProjWeight,
+    FfnProjBias,
+}
+
+fn parse_layer_entry(name: &str) -> Option<(usize, LayerField)> {
+    if !name.starts_with("layer") {
+        return None;
+    }
+    let bytes = name.as_bytes();
+    let mut pos = 5usize;
+    if pos >= bytes.len() {
+        return None;
+    }
+    let mut idx = 0usize;
+    while pos < bytes.len() && bytes[pos].is_ascii_digit() {
+        idx = idx * 10 + (bytes[pos] - b'0') as usize;
+        pos += 1;
+    }
+    if pos >= bytes.len() || bytes[pos] != b'.' {
+        return None;
+    }
+    pos += 1;
+    let suffix = &name[pos..];
+    let field = match suffix {
+        "ln1.weight" => LayerField::Ln1Weight,
+        "ln1.bias" => LayerField::Ln1Bias,
+        "attn.qkv.weight" => LayerField::AttnWeight,
+        "attn.qkv.bias" => LayerField::AttnBias,
+        "attn.proj.weight" => LayerField::AttnProjWeight,
+        "attn.proj.bias" => LayerField::AttnProjBias,
+        "ln2.weight" => LayerField::Ln2Weight,
+        "ln2.bias" => LayerField::Ln2Bias,
+        "ffn.in.weight" => LayerField::FfnWeight,
+        "ffn.in.bias" => LayerField::FfnBias,
+        "ffn.out.weight" => LayerField::FfnProjWeight,
+        "ffn.out.bias" => LayerField::FfnProjBias,
+        _ => return None,
+    };
+    Some((idx, field))
 }
 
 #[cfg(test)]
@@ -464,49 +677,58 @@ extern crate std;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloc::string::String;
+    use alloc::string::ToString;
 
     #[test]
-    fn load_layer_out_of_bounds() {
-        let mut mm = MemoryManager::new_for_test();
-        let manifest = manifest::Manifest {
-            layers: vec![],
-            align: 64,
-            dims: crate::model::dims::ModelDims::new(16, 32),
-        };
-        let mut state = ModelState::new(&mut mm, &manifest);
-        let res = state.load_layer_weights(0);
-        assert!(matches!(res, Err(Error::MemoryError)));
+    fn parse_layer_fields() {
+        assert!(matches!(
+            parse_layer_entry("layer00.ln1.weight"),
+            Some((0, LayerField::Ln1Weight))
+        ));
+        assert!(parse_layer_entry("layer03.ffn.out.bias").is_some());
+        assert!(parse_layer_entry("tok_embeddings").is_none());
     }
 
     #[test]
-    fn apply_embeddings_invalid_token() {
-        let mut mm = MemoryManager::new_for_test();
-        let manifest = manifest::Manifest {
-            layers: vec![manifest::Layer {
-                name: names::L_TOK_EMB.to_string(),
-                offset: 0,
-                size: 64,
-            }],
+    fn layer_plan_collects_layers() {
+        let mut manifest = manifest::Manifest {
+            layers: Vec::new(),
             align: 64,
-            dims: crate::model::dims::ModelDims::new(16, 32),
+            dims: crate::model::dims::ModelDims::fallback(),
         };
-        let mut state = ModelState::new(&mut mm, &manifest);
-        state.current_layer_weights = vec![0.0; 16];
-        let res = state.apply_embeddings(&[manifest.dims.vocab_size]);
-        assert!(matches!(res, Err(Error::ComputationError)));
-    }
+        let names = [
+            names::L_TOK_EMB,
+            names::L_POS_EMB,
+            "layer0.ln1.weight",
+            "layer0.ln1.bias",
+            "layer0.attn.qkv.weight",
+            "layer0.attn.qkv.bias",
+            "layer0.attn.proj.weight",
+            "layer0.attn.proj.bias",
+            "layer0.ln2.weight",
+            "layer0.ln2.bias",
+            "layer0.ffn.in.weight",
+            "layer0.ffn.in.bias",
+            "layer0.ffn.out.weight",
+            "layer0.ffn.out.bias",
+            names::L_FINAL_NORM_WEIGHT,
+            names::L_FINAL_NORM_BIAS,
+            names::L_LM_HEAD,
+        ];
+        for (i, name) in names.iter().enumerate() {
+            manifest.layers.push(manifest::Layer {
+                name: name.to_string(),
+                offset: (i * 16) as u32,
+                size: 16,
+            });
+        }
 
-    #[test]
-    fn generate_output_empty_state() {
-        let mut mm = MemoryManager::new_for_test();
-        let manifest = manifest::Manifest {
-            layers: vec![],
-            align: 64,
-            dims: crate::model::dims::ModelDims::new(16, 32),
-        };
-        let state = ModelState::new(&mut mm, &manifest);
-        let res = state.generate_output();
-        assert!(matches!(res, Err(Error::ComputationError)));
+        let plan = LayerPlan::from_manifest(&manifest);
+        assert_eq!(plan.layers.len(), 1);
+        assert!(plan.embedding.is_some());
+        assert!(plan.positional.is_some());
+        assert!(plan.output.is_some());
+        assert!(plan.final_norm_weight.is_some());
+        assert!(plan.final_norm_bias.is_some());
     }
 }
