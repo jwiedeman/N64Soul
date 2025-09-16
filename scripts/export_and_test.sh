@@ -15,7 +15,7 @@ python tools/validate_weights.py \
   --man n64llm/n64-rust/assets/weights.manifest.bin --crc
 
 # 2) Build ROM (nightly) with build-std only here
-( cd n64llm/n64-rust && cargo +nightly -Z build-std=core,alloc n64 build --profile release )
+ ( cd n64llm/n64-rust && cargo +nightly -Z build-std=core,alloc n64 build --profile release --features embed_assets )
 
 # 3) Optional emu smoke (never moves binaries; asks where to place)
 ./scripts/emu_smoke.sh || true
