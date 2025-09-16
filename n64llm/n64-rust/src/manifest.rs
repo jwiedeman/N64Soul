@@ -1,3 +1,9 @@
+use crate::io::rom_reader::FlatRomReader;
+use crate::model::{
+    config::{D_MODEL_FALLBACK, VOCAB_FALLBACK},
+    dims::ModelDims,
+    meta::load_dims_from_meta,
+};
 use crate::{weights, weights_manifest};
 use alloc::string::ToString;
 use alloc::{string::String, vec::Vec};
@@ -12,11 +18,12 @@ pub struct Layer {
 #[derive(Debug, Clone)]
 pub struct Manifest {
     pub layers: Vec<Layer>,
+    pub align: u32,
+    pub dims: ModelDims,
 }
 
 pub fn load() -> Manifest {
-    let view = weights_manifest::manifest()
-        .expect("invalid weights manifest");
+    let view = weights_manifest::manifest().expect("invalid weights manifest");
     let mut layers = Vec::new();
     let _ = view.for_each(|e| {
         layers.push(Layer {
@@ -26,17 +33,25 @@ pub fn load() -> Manifest {
         });
         true
     });
-    let manifest = Manifest { layers };
-    if !validate(&manifest, view.align() as u32) {
+    let mut rr = FlatRomReader::new();
+    let dims = load_dims_from_meta(&mut rr, &view)
+        .unwrap_or_else(|| ModelDims::new(D_MODEL_FALLBACK, VOCAB_FALLBACK));
+
+    let manifest = Manifest {
+        layers,
+        align: view.align() as u32,
+        dims,
+    };
+    if !validate(&manifest) {
         panic!("invalid weights manifest");
     }
     manifest
 }
 
-fn validate(m: &Manifest, align: u32) -> bool {
+fn validate(m: &Manifest) -> bool {
     let mut last_end = 0u32;
     for layer in &m.layers {
-        if layer.offset % align != 0 {
+        if layer.offset % m.align != 0 {
             return false;
         }
         if layer.offset < last_end {
@@ -49,4 +64,10 @@ fn validate(m: &Manifest, align: u32) -> bool {
         last_end = end;
     }
     true
+}
+
+impl Manifest {
+    pub fn find(&self, name: &str) -> Option<&Layer> {
+        self.layers.iter().find(|l| l.name == name)
+    }
 }

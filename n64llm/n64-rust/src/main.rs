@@ -18,15 +18,15 @@ use core::panic::PanicInfo;
 
 mod diag;
 mod display;
+mod infer;
 mod inference_engine;
 mod io;
 mod manifest;
 mod memory_manager;
 mod model;
+mod stream;
 mod tokenizer;
 mod util;
-mod infer;
-mod stream;
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
@@ -53,6 +53,10 @@ pub extern "C" fn main() -> ! {
 
     let manifest = manifest::load();
     display::print_line(&format!("Manifest layers: {}", manifest.layers.len()));
+    display::print_line(&format!(
+        "Model dims: d_model={} vocab={}",
+        manifest.dims.d_model, manifest.dims.vocab_size
+    ));
 
     // Initialize memory management system.
     let mut memory = unsafe { memory_manager::init() };
@@ -112,7 +116,15 @@ pub extern "C" fn main() -> ! {
 }
 
 fn wait_for_start_button() {
-    // Controller polling not implemented; placeholder for hardware pause.
+    display::print_line("Press START to continue...");
+    loop {
+        let data = unsafe { n64_sys::read_controller(n64_sys::CONTROLLER_1) };
+        if (data.buttons & n64_sys::START_BUTTON) != 0 {
+            break;
+        }
+        delay(1000);
+    }
+    display::print_line("Start detected. Continuing...");
 }
 
 fn delay(ms: u32) {
