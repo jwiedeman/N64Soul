@@ -34,7 +34,11 @@ copied below for convenience. See [docs/setup.md](docs/setup.md) for more detail
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 rustup toolchain install nightly --component rust-src
-cargo install cargo-n64
+
+# Install a patched cargo-n64; upstream 0.2.0 relies on the removed
+# `Error::backtrace` API and fails to build on current compilers.
+bash tools/install_cargo_n64.sh
+
 cargo install nust64
 
 git clone https://github.com/dragonminded/libdragon.git
@@ -48,20 +52,48 @@ below. Use `python tools/check_python_deps.py` to confirm the Python
 dependencies for the export pipeline are present before running any of the
 scripts.
 
+> **Note:** `tools/install_cargo_n64.sh` first attempts a stock `cargo +nightly
+> install cargo-n64`. If that fails it clones the upstream repository, applies a
+> small shim that disables the `backtrace` call, and installs the patched
+> version. Re-running the script is idempotent.
+
 ## Building the Rust project
 
 A custom toolchain is required. Build with nightly and package the resulting ELF into a ROM:
 
+Before building, make sure `n64llm/n64-rust/assets/` contains a manifest and a
+weight blob. For a quick smoke test you can generate synthetic data with:
+
 ```bash
-cd n64llm/n64-rust
-cargo +nightly -Z build-std=core,alloc n64 build --profile release --features embed_assets
+python tools/make_debug_weights.py \
+  --out-bin n64llm/n64-rust/assets/weights.bin \
+  --out-man n64llm/n64-rust/assets/weights.manifest.bin
 ```
 
-The `embed_assets` feature bundles the manifest and weights into the ROM image.
+Once you export a real model, validate it with `python tools/validate_weights.py --crc`
+so the manifest entries are aligned and the CRC32 checksums match.
 
-This produces a bootable Nintendo&nbsp;64 ROM named `n64_gpt.z64` in the current
-directory. The linker and configuration reserve up to roughly 1&nbsp;GiB of cart
-ROM space, though the actual usable limit depends on your flashcart or emulator.
+Nintendo 64 ROMs also require the CIC-6102 boot code. Because that blob is
+copyrighted we cannot ship it; you must provide your own dump via
+`--ipl3 /path/to/cic6102.bin` or extract it from a known-good ROM with
+`--ipl3-from-rom /path/to/rom.z64`.
+
+With weights in place and an IPL3 path available, build the ROM with:
+
+```bash
+cd n64llm/n64-rust
+cargo +nightly -Z build-std=core,alloc n64 build \
+  --ipl3 /path/to/cic6102.bin \
+  -- --release --features embed_assets
+```
+
+The `--` separator passes subsequent flags directly to Cargo so you can request
+the release profile and enable the `embed_assets` feature. Without a valid CIC
+file the subcommand terminates with `invalid argument to option --ipl3`.
+
+On success `cargo-n64` produces `target/n64/release/n64_gpt.z64`. The linker and
+configuration reserve roughly 1&nbsp;GiB of cart ROM space; the actual usable size
+depends on your flashcart or emulator.
 
 ## Building the C project
 
