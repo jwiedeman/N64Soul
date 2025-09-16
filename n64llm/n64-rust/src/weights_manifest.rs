@@ -22,7 +22,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 #[cfg(not(feature = "embed_assets"))]
-use core::sync::atomic::{AtomicPtr, Ordering};
+use core::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 
 #[cfg(not(feature = "embed_assets"))]
 fn man_bytes_host() -> &'static [u8] {
@@ -46,14 +46,20 @@ fn man_bytes_host() -> &'static [u8] {
             };
             push(&mut v, "tok_embeddings", 64, 16, 0);
             push(&mut v, "lm_head", 128, 4, 0);
+            let len = v.len();
             let b = v.into_boxed_slice();
             let p = Box::into_raw(b) as *mut u8;
             P.store(p, Ordering::Relaxed);
+            LEN.store(len, Ordering::Relaxed);
         }
         let p = P.load(Ordering::Relaxed);
-        core::slice::from_raw_parts(p, 4 + 2 + 2 + 4 + (2 + 3 + 4 + 4 + 4) * 2)
+        let len = LEN.load(Ordering::Relaxed);
+        core::slice::from_raw_parts(p, len)
     }
 }
+
+#[cfg(not(feature = "embed_assets"))]
+static LEN: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug, Clone, Copy)]
 pub struct Entry<'a> {

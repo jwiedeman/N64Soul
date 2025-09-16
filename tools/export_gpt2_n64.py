@@ -24,43 +24,6 @@ def write_manifest_v2(path, align, entries):
             m.write(struct.pack("<I", size))
             m.write(struct.pack("<I", crc))
 
-def collect_params_gpt2(model, keep_layers=None):
-    # Keep embeddings, final ln_f, lm_head, and a subset of blocks.
-    # keep_layers=None keeps all; otherwise keep the last N transformer blocks.
-    wanted = set()
-    if keep_layers is not None:
-        L = len(model.transformer.h)
-        keep = set(range(max(0, L - keep_layers), L))
-    else:
-        keep = None
-
-    for n, p in model.named_parameters():
-        if n.startswith("transformer.wte") or n.startswith("transformer.wpe"):
-            wanted.add(n)
-        elif n.startswith("transformer.ln_f"):
-            wanted.add(n)
-        elif n.startswith("lm_head"):
-            wanted.add(n)
-        elif n.startswith("transformer.h."):
-            # block index
-            try:
-                blk = int(n.split(".")[2])
-            except Exception:
-                continue
-            if (keep is None) or (blk in keep):
-                wanted.add(n)
-    # Deterministic order: embeddings → blocks (by idx) → ln_f → lm_head
-    def key(n):
-        if n.startswith("transformer.wte"): return (0, 0, n)
-        if n.startswith("transformer.wpe"): return (0, 1, n)
-        if n.startswith("transformer.h."):
-            parts = n.split(".")
-            return (1, int(parts[2]), n)
-        if n.startswith("transformer.ln_f"): return (2, 0, n)
-        if n.startswith("lm_head"):          return (3, 0, n)
-        return (9, 0, n)
-    return [n for n in sorted(wanted, key=key)]
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="gpt2", help="HF id or local path (e.g. gpt2-medium)")
@@ -78,27 +41,109 @@ def main():
 
     # --- load model
     import torch
-    from transformers import AutoModelForCausalLM
+    from transformers import AutoModelForCausalLM, AutoTokenizer
     model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=(torch.float16 if args.dtype=="fp16" else torch.float32), low_cpu_mem_usage=True)
     model = model.to("cpu")
     model.eval()
 
-    names = collect_params_gpt2(model, keep_layers=args.keep_layers)
+    tokenizer = AutoTokenizer.from_pretrained(args.model)
+
+    def tensor_bytes(t):
+        return t.detach().cpu().to(torch.float32).contiguous().numpy().astype("<f4").tobytes()
 
     entries = []
-    with open(out_bin, "wb") as bout:
-        for name in names:
-            tensor = dict(model.named_parameters())[name].detach().cpu()
-            if args.dtype == "fp16":
-                tensor = tensor.to(torch.float16)
-            data = tensor.contiguous().numpy().tobytes()
-            align64(bout)
-            off = bout.tell()
-            bout.write(data)
-            crc = zlib.crc32(data) & 0xFFFFFFFF
-            entries.append((name, off, len(data), crc))
 
-    write_manifest_v2(out_man, 64, entries)
+    def write_blob(name, blob, bout):
+        align64(bout)
+        off = bout.tell()
+        bout.write(blob)
+        crc = zlib.crc32(blob) & 0xFFFFFFFF
+        entries.append((name, off, len(blob), crc))
+
+    def write_tensor(name, tensor, bout):
+        data = tensor_bytes(tensor)
+        write_blob(name, data, bout)
+
+    d_model = int(model.config.n_embd)
+    all_layers = list(range(len(model.transformer.h)))
+    if args.keep_layers is not None:
+        all_layers = all_layers[-args.keep_layers:]
+    n_layer = len(all_layers)
+    n_head = int(model.config.n_head)
+    n_positions = int(getattr(model.config, "n_positions", getattr(model.config, "n_ctx", 0)))
+    if n_positions == 0:
+        n_positions = tokenizer.model_max_length
+    d_ff = int(getattr(model.config, "n_inner", d_model * 4))
+    vocab_size = int(getattr(model.config, "vocab_size", tokenizer.vocab_size))
+
+    meta = struct.pack(
+        "<IIIIIIII",
+        0x4D455441,
+        1,
+        d_model,
+        vocab_size,
+        n_layer,
+        n_head,
+        n_positions,
+        d_ff,
+    )
+
+    with open(out_bin, "wb") as bout:
+        write_blob("model_meta", meta, bout)
+        write_tensor("tok_embeddings", model.transformer.wte.weight, bout)
+        write_tensor("pos_embeddings", model.transformer.wpe.weight, bout)
+
+        for export_idx, layer_idx in enumerate(all_layers):
+            block = model.transformer.h[layer_idx]
+            prefix = f"layer{export_idx}"
+            write_tensor(f"{prefix}.ln1.weight", block.ln_1.weight, bout)
+            write_tensor(f"{prefix}.ln1.bias", block.ln_1.bias, bout)
+            write_tensor(f"{prefix}.attn.qkv.weight", block.attn.c_attn.weight, bout)
+            write_tensor(f"{prefix}.attn.qkv.bias", block.attn.c_attn.bias, bout)
+            write_tensor(f"{prefix}.attn.proj.weight", block.attn.c_proj.weight, bout)
+            write_tensor(f"{prefix}.attn.proj.bias", block.attn.c_proj.bias, bout)
+            write_tensor(f"{prefix}.ln2.weight", block.ln_2.weight, bout)
+            write_tensor(f"{prefix}.ln2.bias", block.ln_2.bias, bout)
+            write_tensor(f"{prefix}.ffn.in.weight", block.mlp.c_fc.weight, bout)
+            write_tensor(f"{prefix}.ffn.in.bias", block.mlp.c_fc.bias, bout)
+            write_tensor(f"{prefix}.ffn.out.weight", block.mlp.c_proj.weight, bout)
+            write_tensor(f"{prefix}.ffn.out.bias", block.mlp.c_proj.bias, bout)
+
+        write_tensor("ln_f.weight", model.transformer.ln_f.weight, bout)
+        write_tensor("ln_f.bias", model.transformer.ln_f.bias, bout)
+        write_tensor("lm_head", model.lm_head.weight, bout)
+
+        vocab = tokenizer.get_vocab()
+        vocab_items = [None] * len(vocab)
+        for token, idx in vocab.items():
+            vocab_items[idx] = token
+
+        merges = []
+        try:
+            merge_pairs = tokenizer.backend_tokenizer.model.get_merges()
+        except AttributeError:
+            merge_pairs = []
+        for pair in merge_pairs:
+            if isinstance(pair, (list, tuple)) and len(pair) == 2:
+                left, right = pair
+                merged = left + right
+                if left in vocab and right in vocab and merged in vocab:
+                    merges.append((vocab[left], vocab[right], vocab[merged]))
+
+        tok_blob = bytearray()
+        tok_blob.extend(b"BPE1")
+        tok_blob.extend(struct.pack("<H", 1))
+        tok_blob.extend(struct.pack("<H", 0))
+        tok_blob.extend(struct.pack("<I", len(vocab_items)))
+        tok_blob.extend(struct.pack("<I", len(merges)))
+        for token in vocab_items:
+            data = token.encode("utf-8")
+            tok_blob.extend(struct.pack("<H", len(data)))
+            tok_blob.extend(data)
+        for left_id, right_id, result_id in merges:
+            tok_blob.extend(struct.pack("<III", left_id, right_id, result_id))
+
+        write_blob("tokenizer.model", tok_blob, bout)
 
     # archive export metadata (for reproducibility)
     stamp = time.strftime("%Y%m%d-%H%M%S")

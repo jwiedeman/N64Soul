@@ -1,9 +1,5 @@
 use crate::io::rom_reader::FlatRomReader;
-use crate::model::{
-    config::{D_MODEL_FALLBACK, VOCAB_FALLBACK},
-    dims::ModelDims,
-    meta::load_dims_from_meta,
-};
+use crate::model::{dims::ModelDims, meta::load_dims_from_meta};
 use crate::{weights, weights_manifest};
 use alloc::string::ToString;
 use alloc::{string::String, vec::Vec};
@@ -34,8 +30,7 @@ pub fn load() -> Manifest {
         true
     });
     let mut rr = FlatRomReader::new();
-    let dims = load_dims_from_meta(&mut rr, &view)
-        .unwrap_or_else(|| ModelDims::new(D_MODEL_FALLBACK, VOCAB_FALLBACK));
+    let dims = load_dims_from_meta(&mut rr, &view).unwrap_or_else(ModelDims::fallback);
 
     let manifest = Manifest {
         layers,

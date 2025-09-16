@@ -74,8 +74,23 @@ pub extern "C" fn main() -> ! {
             display::print_line("Working...");
 
             let output_text = {
-                let mut tokenizer = tokenizer::Tokenizer::new(&mut memory);
-                let input_tokens = tokenizer.encode(&input_buffer);
+                let mut tokenizer = match tokenizer::Tokenizer::new(&manifest, &mut memory) {
+                    Ok(tok) => tok,
+                    Err(e) => {
+                        display::print_line(&format!("Tokenizer error: {}", e));
+                        input_buffer.clear();
+                        continue;
+                    }
+                };
+
+                let input_tokens = match tokenizer.encode(&input_buffer) {
+                    Ok(tokens) => tokens,
+                    Err(e) => {
+                        display::print_line(&format!("Encode error: {}", e));
+                        input_buffer.clear();
+                        continue;
+                    }
+                };
 
                 let output_tokens = match {
                     let mut engine = inference_engine::ModelState::new(&mut memory, &manifest);
@@ -89,8 +104,14 @@ pub extern "C" fn main() -> ! {
                     }
                 };
 
-                let mut tokenizer = tokenizer::Tokenizer::new(&mut memory);
-                tokenizer.decode(&output_tokens)
+                match tokenizer.decode(&output_tokens) {
+                    Ok(text) => text,
+                    Err(e) => {
+                        display::print_line(&format!("Decode error: {}", e));
+                        input_buffer.clear();
+                        continue;
+                    }
+                }
             };
             memory.log_usage("post_infer");
 
