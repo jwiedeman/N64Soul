@@ -1,109 +1,79 @@
 // tokenizer.rs
 // Simple tokenizer for GPT model
 
+use crate::memory_manager::MemoryManager;
 use alloc::string::String;
 use alloc::vec::Vec;
-use crate::memory_manager::MemoryManager;
-use crate::platform::pi;
 
-// Constants for tokenizer
-const VOCAB_SIZE: usize = 25000;
-const MAX_TOKEN_LENGTH: usize = 16;
-const VOCAB_TABLE_OFFSET: u32 = 0x00E00000; // ROM offset for vocabulary data
+const BASIC_VOCAB: &[(&str, u32)] = &[
+    ("\n", 10),
+    (" the", 1),
+    ("and", 2),
+    (" to", 3),
+    ("of", 4),
+    ("you", 5),
+    (" I", 6),
+    ("a", 7),
+    ("is", 8),
+    ("in", 9),
+    ("for", 11),
+    ("with", 12),
+    ("GPT", 13),
+    ("N64", 14),
+    ("AI", 15),
+    ("?", 63),
+    ("!", 64),
+    (",", 44),
+    (".", 46),
+    ("-", 45),
+];
 
-// Simple tokenizer for GPT model
-pub struct Tokenizer<'a> {
-    // In a full implementation, we'd have a proper BPE tokenizer
-    // For this demo, we'll use a simplified character-level approach
-    memory_manager: &'a mut MemoryManager,
-    // Basic vocabulary cache
+pub struct Tokenizer {
     vocab_cache: Vec<(String, u32)>,
     vocab_loaded: bool,
 }
 
-impl<'a> Tokenizer<'a> {
-    pub fn new(memory_manager: &'a mut MemoryManager) -> Self {
+impl Tokenizer {
+    pub fn new(_memory_manager: &mut MemoryManager) -> Self {
         Tokenizer {
-            memory_manager,
             vocab_cache: Vec::with_capacity(256), // Cache common tokens
             vocab_loaded: false,
         }
     }
-    
+
     // Load basic vocabulary from ROM
     fn load_basic_vocab(&mut self) -> bool {
         if self.vocab_loaded {
             return true;
         }
-        
-        // Allocate buffer for loading vocab data
-        let buffer_size = 256 * (MAX_TOKEN_LENGTH + 4); // 256 entries, each with string + u32
-        let buffer_ptr = match self.memory_manager.alloc(buffer_size, 4) {
-            Some(ptr) => ptr.as_ptr(),
-            None => return false,
-        };
-        
-        // Read from ROM
-        unsafe {
-            let buf = core::slice::from_raw_parts_mut(buffer_ptr, buffer_size);
-            if pi::pi_dma_read(VOCAB_TABLE_OFFSET as u64, buf).is_err() {
-                return false;
-            }
-            
-            // Process the loaded data
-            let mut offset = 0;
-            for _ in 0..256 {
-                // Read token length
-                let length = *buffer_ptr.add(offset) as usize;
-                offset += 1;
-                
-                if length > 0 && length <= MAX_TOKEN_LENGTH {
-                    // Read token string
-                    let mut token = String::with_capacity(length);
-                    for i in 0..length {
-                        token.push(*buffer_ptr.add(offset + i) as char);
-                    }
-                    offset += MAX_TOKEN_LENGTH; // Fixed-size field
-                    
-                    // Read token ID
-                    let token_id = u32::from_be_bytes([
-                        *buffer_ptr.add(offset),
-                        *buffer_ptr.add(offset + 1),
-                        *buffer_ptr.add(offset + 2),
-                        *buffer_ptr.add(offset + 3)
-                    ]);
-                    offset += 4;
-                    
-                    // Add to cache
-                    self.vocab_cache.push((token, token_id));
-                }
-            }
+
+        for &(token, id) in BASIC_VOCAB {
+            self.vocab_cache.push((String::from(token), id));
         }
-        
         self.vocab_loaded = true;
         true
     }
-    
+
     pub fn encode(&mut self, text: &str) -> Vec<u32> {
         // This is a very simplified tokenization
         // A real implementation would use BPE tokenization
 
         // Ensure the basic vocabulary is loaded so cached tokens work
         self.load_basic_vocab();
-        
+
         let mut tokens = Vec::new();
-        
+
         // First try to match against our vocab cache
         if self.vocab_loaded {
             let mut pos = 0;
             while pos < text.len() {
                 let remain = &text[pos..];
                 let mut found = false;
-                
+
                 // Try to find the longest matching token in our cache
                 let mut best_len = 0;
                 let mut best_id = 0;
-                
+
                 for (token, id) in &self.vocab_cache {
                     if remain.starts_with(token) && token.len() > best_len {
                         best_len = token.len();
@@ -111,7 +81,7 @@ impl<'a> Tokenizer<'a> {
                         found = true;
                     }
                 }
-                
+
                 if found {
                     tokens.push(best_id);
                     pos += best_len;
@@ -140,22 +110,20 @@ impl<'a> Tokenizer<'a> {
                 }
             }
         }
-        
+
         tokens
     }
-    
-    pub fn decode(&mut self, tokens: &[u32]) -> String {
-        // Simple decoding
 
+    pub fn decode(&mut self, tokens: &[u32]) -> String {
         // Ensure vocabulary is available for reverse lookup
         self.load_basic_vocab();
 
         let mut text = String::new();
-        
+
         for &token in tokens {
             // First check if it's in our vocab cache
             let mut found = false;
-            
+
             if self.vocab_loaded {
                 for (tok_str, tok_id) in &self.vocab_cache {
                     if *tok_id == token {
@@ -165,7 +133,7 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
             }
-            
+
             // Fallback to character-level decoding
             if !found {
                 if token == ('\n' as u32) {
@@ -175,7 +143,7 @@ impl<'a> Tokenizer<'a> {
                 }
             }
         }
-        
+
         text
     }
 }
@@ -189,12 +157,8 @@ mod tests {
 
     #[test]
     fn roundtrip_simple() {
-        let mut mm = MemoryManager::new();
-        let mut tok = Tokenizer {
-            memory_manager: &mut mm,
-            vocab_cache: Vec::new(),
-            vocab_loaded: true,
-        };
+        let mut mm = crate::memory_manager::new_for_test();
+        let mut tok = Tokenizer::new(&mut mm);
         let tokens = tok.encode("hi");
         let text = tok.decode(&tokens);
         assert_eq!(text, "hi");
