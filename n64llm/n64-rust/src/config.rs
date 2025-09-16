@@ -2,6 +2,11 @@
 
 pub const BURST_BYTES: usize = 32 * 1024; // Try 16K/32K/64K later
 
+// Heap size used by the runtime allocator. Set higher during profiling to
+// observe how close large exports come to exhausting RDRAM. The default keeps
+// roughly 1 MiB of headroom on an 8 MiB system.
+pub const HEAP_SIZE_BYTES: usize = 4 * 1024 * 1024;
+
 // Size of each streaming block (x2 for double-buffer). Keep modest for 8 MiB RDRAM.
 pub const STREAM_BLOCK_BYTES: usize = 32 * 1024;
 pub const ROM_ALIGN: usize = 64;          // Exporter enforces; reader asserts

@@ -10,7 +10,7 @@ use alloc::boxed::Box;
 
 // Define memory regions
 const HEAP_START: usize = 0x80300000; // Starting after N64's OS
-const HEAP_SIZE: usize = 0x100000; // 1MB heap
+const HEAP_SIZE: usize = crate::config::HEAP_SIZE_BYTES;
 
 struct BumpArena {
     heap_start: usize,

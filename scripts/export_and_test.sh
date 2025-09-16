@@ -5,6 +5,11 @@ set -euo pipefail
 ( cd n64llm/n64-rust && cargo test --lib --features host --verbose )
 ( cd n64llm/n64-rust && cargo test --test host_sanity --features host --verbose )
 
+# 0b) Verify Python dependencies needed for export
+if [ "${SKIP_PY_DEPS:-0}" != "1" ]; then
+  python tools/check_python_deps.py
+fi
+
 # 1) Export GPT weights
 if [ "${SKIP_EXPORT:-0}" != "1" ]; then
   python tools/export_gpt2_n64.py \
