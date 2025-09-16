@@ -73,7 +73,11 @@ def main():
     n_positions = int(getattr(model.config, "n_positions", getattr(model.config, "n_ctx", 0)))
     if n_positions == 0:
         n_positions = tokenizer.model_max_length
-    d_ff = int(getattr(model.config, "n_inner", d_model * 4))
+    d_ff_attr = getattr(model.config, "n_inner", None)
+    if d_ff_attr is None:
+        d_ff = d_model * 4
+    else:
+        d_ff = int(d_ff_attr)
     vocab_size = int(getattr(model.config, "vocab_size", tokenizer.vocab_size))
 
     meta = struct.pack(
@@ -144,6 +148,8 @@ def main():
             tok_blob.extend(struct.pack("<III", left_id, right_id, result_id))
 
         write_blob("tokenizer.model", tok_blob, bout)
+
+    write_manifest_v2(out_man, 64, entries)
 
     # archive export metadata (for reproducibility)
     stamp = time.strftime("%Y%m%d-%H%M%S")
