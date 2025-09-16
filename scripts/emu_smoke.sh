@@ -7,7 +7,7 @@ ASSETS="n64llm/n64-rust/assets"
 [[ -f "$ASSETS/weights.manifest.bin" ]] || { echo "Joshua: please move your manifest to $ASSETS/weights.manifest.bin"; exit 1; }
 
 # 1) Build (no moving binaries).
-PACK_ROM=1 cargo build --release
+PACK_ROM=1 cargo build --release --features embed_assets
 
 # 2) Find the produced ROM and run emulator if available.
 ROM="$(ls -1 target/**/release/*.z64 2>/dev/null | head -n1 || true)"
