@@ -44,7 +44,9 @@ export PATH="$PWD/mips64-elf/bin:$PATH"
 ```
 
 After installing these tools you can build and run the examples as described
-below.
+below. Use `python tools/check_python_deps.py` to confirm the Python
+dependencies for the export pipeline are present before running any of the
+scripts.
 
 ## Building the Rust project
 
@@ -84,6 +86,8 @@ mupen64plus n64llm/n64-rust/n64_gpt.z64
 (Replace the path with the built ROM.)
 The helper script `scripts/emu_smoke.sh` can perform a headless emulator smoke
 test; it will never move binaries for you and instead asks where to place them.
+See [docs/emulator.md](docs/emulator.md) for recommended emulator settings and
+controller mappings when exercising the on-screen keyboard UI.
 
 ## Running on real hardware
 

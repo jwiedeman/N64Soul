@@ -1,8 +1,10 @@
 use crate::display;
+use crate::io::rom_reader::FlatRomReader;
 use crate::manifest;
 use crate::memory_manager::MemoryManager;
 use crate::model::names;
 use crate::n64_math;
+use crate::stream::streamer::stream_entry;
 use crate::{platform::pi, weights};
 use alloc::collections::BTreeMap;
 use alloc::vec;
@@ -42,10 +44,10 @@ pub struct ModelState<'a> {
     residual: Vec<f32>,
     normed: Vec<f32>,
     attn_output: Vec<f32>,
+    context: Vec<f32>,
     ffn_hidden: Vec<f32>,
     ffn_mid: Vec<f32>,
     weights_a: Vec<f32>,
-    weights_b: Vec<f32>,
     bias_a: Vec<f32>,
     bias_b: Vec<f32>,
     qkv_buffer: Vec<f32>,
@@ -67,10 +69,10 @@ impl<'a> ModelState<'a> {
             residual: Vec::new(),
             normed: Vec::new(),
             attn_output: Vec::new(),
+            context: Vec::new(),
             ffn_hidden: Vec::new(),
             ffn_mid: Vec::new(),
             weights_a: Vec::new(),
-            weights_b: Vec::new(),
             bias_a: Vec::new(),
             bias_b: Vec::new(),
             qkv_buffer: Vec::new(),
@@ -127,11 +129,7 @@ impl<'a> ModelState<'a> {
             &mut self.normed,
         )?;
 
-        self.load_layer_f32_into(layer.attn_weight, &mut self.weights_a)?;
-        self.load_layer_f32_into(layer.attn_bias, &mut self.bias_a)?;
-        self.load_layer_f32_into(layer.attn_proj_weight, &mut self.weights_b)?;
-        self.load_layer_f32_into(layer.attn_proj_bias, &mut self.bias_b)?;
-        self.apply_attention(seq_len, hidden_size)?;
+        self.apply_attention(layer, seq_len, hidden_size)?;
 
         for i in 0..self.hidden_states.len() {
             self.hidden_states[i] = self.attn_output[i] + self.residual[i];
@@ -149,11 +147,7 @@ impl<'a> ModelState<'a> {
             &mut self.normed,
         )?;
 
-        self.load_layer_f32_into(layer.ffn_weight, &mut self.weights_a)?;
-        self.load_layer_f32_into(layer.ffn_bias, &mut self.bias_a)?;
-        self.load_layer_f32_into(layer.ffn_proj_weight, &mut self.weights_b)?;
-        self.load_layer_f32_into(layer.ffn_proj_bias, &mut self.bias_b)?;
-        self.apply_ffn(seq_len, hidden_size)?;
+        self.apply_ffn(layer, seq_len, hidden_size)?;
 
         for i in 0..self.hidden_states.len() {
             self.hidden_states[i] = self.ffn_hidden[i] + self.residual[i];
@@ -194,7 +188,12 @@ impl<'a> ModelState<'a> {
         Ok(())
     }
 
-    fn apply_attention(&mut self, seq_len: usize, hidden_size: usize) -> Result<(), Error> {
+    fn apply_attention(
+        &mut self,
+        layer: &LayerSpec,
+        seq_len: usize,
+        hidden_size: usize,
+    ) -> Result<(), Error> {
         let n_heads = self.dims.n_head as usize;
         if n_heads == 0 || hidden_size % n_heads != 0 {
             return Err(Error::ComputationError);
@@ -202,30 +201,28 @@ impl<'a> ModelState<'a> {
         let head_dim = hidden_size / n_heads;
         let three_hidden = hidden_size * 3;
 
-        if self.weights_a.len() != hidden_size * three_hidden
-            || self.bias_a.len() != three_hidden
-            || self.weights_b.len() != hidden_size * hidden_size
-            || self.bias_b.len() != hidden_size
-        {
+        self.load_layer_f32_into(layer.attn_bias, &mut self.bias_a)?;
+        if self.bias_a.len() != three_hidden {
             return Err(Error::ComputationError);
         }
 
-        self.ensure_vec(&mut self.qkv_buffer, seq_len * three_hidden);
-        self.ensure_vec(&mut self.attn_output, seq_len * hidden_size);
-        for val in self.attn_output.iter_mut() {
+        self.stream_layer_matmul(
+            layer.attn_weight,
+            &self.normed,
+            seq_len,
+            hidden_size,
+            three_hidden,
+            &self.bias_a,
+            &mut self.qkv_buffer,
+        )?;
+
+        self.ensure_vec(&mut self.context, seq_len * hidden_size);
+        for val in self.context.iter_mut() {
             *val = 0.0;
         }
         self.ensure_vec(&mut self.scores, seq_len);
-
-        for t in 0..seq_len {
-            for out_idx in 0..three_hidden {
-                let mut sum = self.bias_a[out_idx];
-                for i in 0..hidden_size {
-                    sum += self.normed[t * hidden_size + i]
-                        * self.weights_a[i * three_hidden + out_idx];
-                }
-                self.qkv_buffer[t * three_hidden + out_idx] = sum;
-            }
+        for val in self.scores.iter_mut() {
+            *val = 0.0;
         }
 
         for head in 0..n_heads {
@@ -259,61 +256,74 @@ impl<'a> ModelState<'a> {
                     for i in 0..head_dim {
                         let v = self.qkv_buffer
                             [s * three_hidden + 2 * hidden_size + head * head_dim + i];
-                        self.attn_output[t * hidden_size + head * head_dim + i] += weight * v;
+                        self.context[t * hidden_size + head * head_dim + i] += weight * v;
                     }
                 }
             }
         }
 
-        for t in 0..seq_len {
-            for out_idx in 0..hidden_size {
-                let mut sum = self.bias_b[out_idx];
-                for i in 0..hidden_size {
-                    sum += self.attn_output[t * hidden_size + i]
-                        * self.weights_b[i * hidden_size + out_idx];
-                }
-                self.attn_output[t * hidden_size + out_idx] = sum;
-            }
+        self.load_layer_f32_into(layer.attn_proj_bias, &mut self.bias_b)?;
+        if self.bias_b.len() != hidden_size {
+            return Err(Error::ComputationError);
         }
+
+        self.stream_layer_matmul(
+            layer.attn_proj_weight,
+            &self.context,
+            seq_len,
+            hidden_size,
+            hidden_size,
+            &self.bias_b,
+            &mut self.attn_output,
+        )?;
 
         Ok(())
     }
 
-    fn apply_ffn(&mut self, seq_len: usize, hidden_size: usize) -> Result<(), Error> {
+    fn apply_ffn(
+        &mut self,
+        layer: &LayerSpec,
+        seq_len: usize,
+        hidden_size: usize,
+    ) -> Result<(), Error> {
         let d_ff = self.dims.d_ff as usize;
         if d_ff == 0 {
             return Err(Error::ComputationError);
         }
-        if self.weights_a.len() != hidden_size * d_ff
-            || self.bias_a.len() != d_ff
-            || self.weights_b.len() != d_ff * hidden_size
-            || self.bias_b.len() != hidden_size
-        {
+
+        self.load_layer_f32_into(layer.ffn_bias, &mut self.bias_a)?;
+        if self.bias_a.len() != d_ff {
             return Err(Error::ComputationError);
         }
 
-        self.ensure_vec(&mut self.ffn_mid, seq_len * d_ff);
-        self.ensure_vec(&mut self.ffn_hidden, seq_len * hidden_size);
+        self.stream_layer_matmul(
+            layer.ffn_weight,
+            &self.normed,
+            seq_len,
+            hidden_size,
+            d_ff,
+            &self.bias_a,
+            &mut self.ffn_mid,
+        )?;
 
-        for t in 0..seq_len {
-            for out_idx in 0..d_ff {
-                let mut sum = self.bias_a[out_idx];
-                for i in 0..hidden_size {
-                    sum += self.normed[t * hidden_size + i] * self.weights_a[i * d_ff + out_idx];
-                }
-                self.ffn_mid[t * d_ff + out_idx] = gelu(sum);
-            }
+        for val in self.ffn_mid.iter_mut() {
+            *val = gelu(*val);
         }
 
-        for t in 0..seq_len {
-            for out_idx in 0..hidden_size {
-                let mut sum = self.bias_b[out_idx];
-                for i in 0..d_ff {
-                    sum += self.ffn_mid[t * d_ff + i] * self.weights_b[i * hidden_size + out_idx];
-                }
-                self.ffn_hidden[t * hidden_size + out_idx] = sum;
-            }
+        self.load_layer_f32_into(layer.ffn_proj_bias, &mut self.bias_b)?;
+        if self.bias_b.len() != hidden_size {
+            return Err(Error::ComputationError);
         }
+
+        self.stream_layer_matmul(
+            layer.ffn_proj_weight,
+            &self.ffn_mid,
+            seq_len,
+            d_ff,
+            hidden_size,
+            &self.bias_b,
+            &mut self.ffn_hidden,
+        )?;
 
         Ok(())
     }
@@ -479,6 +489,85 @@ impl<'a> ModelState<'a> {
         for (i, chunk) in self.dma_buffer.chunks_exact(4).enumerate() {
             out[i] = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
         }
+        Ok(())
+    }
+
+    fn stream_layer_matmul(
+        &mut self,
+        idx: usize,
+        input: &[f32],
+        seq_len: usize,
+        in_dim: usize,
+        out_dim: usize,
+        bias: &[f32],
+        output: &mut Vec<f32>,
+    ) -> Result<(), Error> {
+        if input.len() != seq_len * in_dim {
+            return Err(Error::ComputationError);
+        }
+        if bias.len() != out_dim {
+            return Err(Error::ComputationError);
+        }
+
+        let layer = self.manifest.layers.get(idx).ok_or(Error::MemoryError)?;
+        let expected_bytes = (in_dim as u64)
+            .checked_mul(out_dim as u64)
+            .and_then(|v| v.checked_mul(core::mem::size_of::<f32>() as u64))
+            .ok_or(Error::ComputationError)?;
+        if expected_bytes != layer.size as u64 {
+            return Err(Error::ComputationError);
+        }
+
+        output.resize(seq_len * out_dim, 0.0);
+        for chunk in output.chunks_mut(out_dim) {
+            chunk.copy_from_slice(bias);
+        }
+
+        if expected_bytes == 0 {
+            return Ok(());
+        }
+
+        let cart_off = weights::weights_rel_to_cart_off(layer.offset as u64);
+        let mut rr = FlatRomReader::new();
+        let mut row = 0usize;
+        let mut col = 0usize;
+        let mut compute_ok = true;
+
+        let stats = stream_entry(&mut rr, cart_off, expected_bytes, |chunk| {
+            if !compute_ok {
+                return;
+            }
+            let mut iter = chunk.chunks_exact(4);
+            for word in iter.by_ref() {
+                if row >= in_dim {
+                    compute_ok = false;
+                    break;
+                }
+                let weight = f32::from_le_bytes([word[0], word[1], word[2], word[3]]);
+                for t in 0..seq_len {
+                    let inp = input[t * in_dim + row];
+                    let out_idx = t * out_dim + col;
+                    output[out_idx] += inp * weight;
+                }
+                col += 1;
+                if col == out_dim {
+                    col = 0;
+                    row += 1;
+                }
+            }
+            if !iter.remainder().is_empty() {
+                compute_ok = false;
+            }
+        });
+
+        if stats.is_none() {
+            return Err(Error::RomReadError);
+        }
+
+        if !compute_ok || row != in_dim || col != 0 {
+            return Err(Error::ComputationError);
+        }
+
         Ok(())
     }
 

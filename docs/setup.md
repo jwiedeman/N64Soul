@@ -34,6 +34,19 @@ After the build completes, add the toolchain to your `PATH`:
 export PATH="$PWD/mips64-elf/bin:$PATH"
 ```
 
+## Python dependencies
+
+The export scripts import PyTorch and Hugging Face Transformers. Use the helper
+script to confirm the modules are available before running any of the weight
+pipelines:
+
+```bash
+python tools/check_python_deps.py
+```
+
+The script lists any missing modules together with the pip command needed to
+install them.
+
 ## Emulator
 
 For local testing you can install an N64 emulator such as **Mupen64Plus**. On Debian-based systems:
