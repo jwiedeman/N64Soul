@@ -1,7 +1,3 @@
-#![no_std]
-#![no_main]
-#![feature(asm, naked_functions)]
-
 //! Production‐ready IPL3 boot code for Nintendo 64 in Rust.
 //!
 //! This module initializes RDRAM, clears memory using RSP DMA,
@@ -78,7 +74,7 @@ static HEADER: RomHeader = RomHeader {
 
 #[link_section = ".banner"]
 #[used]
-static BANNER: [u8; 32] = *b" Libdragon IPL3 Coded by Rasky ";
+static BANNER: [u8; 32] = *b" Libdragon IPL3 Coded by Rasky  ";
 
 //
 // --- External Symbols ---
@@ -146,8 +142,8 @@ unsafe fn debugf(msg: &str) {
 /// Clear caches (data and instruction) using MIPS cache instructions.
 unsafe fn cop0_clear_cache() {
     // Production: flush caches. This example uses a simple sync.
-    asm!("cache 0x00, 0($0)", in(reg) 0 as u32, options(nostack));
-    asm!("cache 0x01, 0($0)", in(reg) 0 as u32, options(nostack));
+    asm!("cache 0x00, 0($0)", options(nostack));
+    asm!("cache 0x01, 0($0)", options(nostack));
 }
 
 /// Memory barrier to ensure ordering.
@@ -278,9 +274,10 @@ unsafe fn mem_bank_init(chip_id: i32, last: bool) {
 #[link_section = ".stage1.pre"]
 pub unsafe extern "C" fn stage1pre() -> ! {
     asm!(
-        "li $sp, {stack}",
+        "lui $sp, 0xA400",
+        "ori $sp, $sp, 0x0FF0",
         "j stage1",
-        stack = const 0xA4000000 + 4096 - 0x10, // DMEM stack pointer (adjust as needed)
+        "nop",
         options(noreturn)
     );
 }
@@ -306,7 +303,7 @@ pub unsafe extern "C" fn stage1() -> ! {
 
     let memsize: i32;
     if !bbplayer && read_volatile(RI_SELECT) == 0 {
-        memsize = rdram_init(mem_bank_init);
+        memsize = rdram_init(|chip, last| unsafe { mem_bank_init(chip, last) });
     } else {
         // For iQue hardware, use the OS-provided memory size.
         // Read from the special location 0xA0000318.
