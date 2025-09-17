@@ -44,12 +44,13 @@ repository.
 
 Install the Rust toolchain and helper utilities. See
 [docs/setup.md](docs/setup.md) for more detail. The project is pinned to the
-`nightly-2022-06-21` toolchain because newer nightlies no longer ship the
-`mips-nintendo64-none` target:
+`nightly-2024-10-01` toolchain so the bundled `cargo` understands the current
+`Cargo.lock` format while `cargo-n64` continues targeting
+`mips-nintendo64-none`:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-export N64SOUL_TOOLCHAIN=nightly-2022-06-21
+export N64SOUL_TOOLCHAIN=nightly-2024-10-01
 
 rustup toolchain install "$N64SOUL_TOOLCHAIN"
 rustup component add rust-src --toolchain "$N64SOUL_TOOLCHAIN"
@@ -62,7 +63,7 @@ cargo install nust64
 ```
 
 Rustup no longer publishes a `mips-nintendo64-none` standard library, so running
-`rustup target add` now reports `toolchain 'nightly-2022-06-21-…' does not
+`rustup target add` now reports `toolchain 'nightly-2024-10-01-…' does not
 support target`. That failure is expected—`cargo-n64` provides the target
 specification and the build uses `-Zbuild-std=core,alloc` to compile `core` and
 `alloc` from the `rust-src` component.
@@ -90,7 +91,7 @@ export N64_SOUL_MODEL_ID=distilgpt2
 export N64_SOUL_DTYPE=fp16
 export N64_SOUL_KEEP_LAYERS=8
 
-TOOLCHAIN="${N64SOUL_TOOLCHAIN:-nightly-2022-06-21}"
+TOOLCHAIN="${N64SOUL_TOOLCHAIN:-nightly-2024-10-01}"
 cargo +"$TOOLCHAIN" -Z build-std=core,alloc n64 build --features embed_assets
 ```
 
