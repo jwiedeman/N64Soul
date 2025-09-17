@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROM_DIR="$ROOT_DIR/n64llm/n64-rust"
 ASSETS="$ROM_DIR/assets"
 ROM_GLOB="$ROM_DIR/target"/n64/release/*.z64
+TOOLCHAIN="${N64SOUL_TOOLCHAIN:-nightly-2022-06-21}"
 
 cd "$ROOT_DIR"
 
@@ -16,7 +17,7 @@ if [[ -z "$ROM_PATH" ]]; then
   echo "No ROM found; rebuilding with existing assets."
   (
     cd "$ROM_DIR" && \
-    N64_SOUL_SKIP_EXPORT=1 cargo +nightly -Z build-std=core,alloc n64 build --profile release --features embed_assets
+    N64_SOUL_SKIP_EXPORT=1 cargo +"$TOOLCHAIN" -Z build-std=core,alloc n64 build --profile release --features embed_assets
   )
   ROM_PATH=$(ls -1 $ROM_GLOB 2>/dev/null | head -n1 || true)
 fi

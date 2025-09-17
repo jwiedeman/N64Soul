@@ -12,17 +12,27 @@ Install Rust using [`rustup`](https://rustup.rs/) if it is not already available
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-Then add the Nintendo 64 target and install the helper subcommand:
+Then add the Nintendo 64 target and install the helper subcommand. The
+`mips-nintendo64-none` target disappeared from recent nightlies, so the build
+expects the pinned toolchain `nightly-2022-06-21`. Export the toolchain once so
+the helper scripts and docs remain in sync:
 
 ```bash
-rustup toolchain install nightly --component rust-src
-rustup target add mips-nintendo64-none --toolchain nightly
-bash tools/install_cargo_n64.sh
+export N64SOUL_TOOLCHAIN=nightly-2022-06-21
+
+rustup toolchain install "$N64SOUL_TOOLCHAIN"
+rustup component add rust-src --toolchain "$N64SOUL_TOOLCHAIN"
+rustup target add mips-nintendo64-none --toolchain "$N64SOUL_TOOLCHAIN"
+
+# Install cargo-n64 with the pinned toolchain.
+N64SOUL_TOOLCHAIN="$N64SOUL_TOOLCHAIN" bash tools/install_cargo_n64.sh
+
+# Optional utilities can use stable.
 cargo install nust64
 ```
 
 The `tools/install_cargo_n64.sh` script first attempts a stock
-`cargo +nightly install cargo-n64`. If that fails it clones upstream,
+`cargo +"$N64SOUL_TOOLCHAIN" install cargo-n64`. If that fails it clones upstream,
 patches the offending dependency, and reinstalls the tool in-place.
 Re-running the script is idempotent.
 

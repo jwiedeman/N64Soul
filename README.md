@@ -43,16 +43,21 @@ repository.
 ## Environment setup
 
 Install the Rust toolchain and helper utilities. See
-[docs/setup.md](docs/setup.md) for more detail.
+[docs/setup.md](docs/setup.md) for more detail. The project is pinned to the
+`nightly-2022-06-21` toolchain because newer nightlies no longer ship the
+`mips-nintendo64-none` target:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-rustup toolchain install nightly --component rust-src
-rustup target add mips-nintendo64-none --toolchain nightly
+export N64SOUL_TOOLCHAIN=nightly-2022-06-21
+
+rustup toolchain install "$N64SOUL_TOOLCHAIN"
+rustup component add rust-src --toolchain "$N64SOUL_TOOLCHAIN"
+rustup target add mips-nintendo64-none --toolchain "$N64SOUL_TOOLCHAIN"
 
 # Install a patched cargo-n64; upstream 0.2.0 relies on the removed
 # `Error::backtrace` API and fails to build on current compilers.
-bash tools/install_cargo_n64.sh
+N64SOUL_TOOLCHAIN="$N64SOUL_TOOLCHAIN" bash tools/install_cargo_n64.sh
 
 cargo install nust64
 ```
@@ -62,8 +67,7 @@ below. Use `python tools/check_python_deps.py` to confirm the Python
 dependencies for the export pipeline are present before running any of the
 scripts.
 
-> **Note:** `tools/install_cargo_n64.sh` first attempts a stock `cargo +nightly
-> install cargo-n64`. If that fails it clones the upstream repository, applies a
+> **Note:** `tools/install_cargo_n64.sh` first attempts a stock `cargo +"$N64SOUL_TOOLCHAIN" install cargo-n64`. If that fails it clones the upstream repository, applies a
 > small shim that disables the `backtrace` call, and installs the patched
 > version. Re-running the script is idempotent.
 
@@ -81,7 +85,8 @@ export N64_SOUL_MODEL_ID=distilgpt2
 export N64_SOUL_DTYPE=fp16
 export N64_SOUL_KEEP_LAYERS=8
 
-cargo +nightly -Z build-std=core,alloc n64 build --profile release --features embed_assets
+TOOLCHAIN="${N64SOUL_TOOLCHAIN:-nightly-2022-06-21}"
+cargo +"$TOOLCHAIN" -Z build-std=core,alloc n64 build --profile release --features embed_assets
 ```
 
 Unset `N64_SOUL_KEEP_LAYERS` (or skip exporting entirely) to use the full model.
