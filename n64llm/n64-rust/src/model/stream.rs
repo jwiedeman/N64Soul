@@ -1,6 +1,7 @@
 use crate::platform::cart::RomSource;
 use crate::stream::prefetch::Prefetcher;
 use crate::manifest::Manifest;
+use core::{ptr::addr_of_mut, slice};
 
 pub struct LayerDesc {
     pub offset: u32,
@@ -20,14 +21,11 @@ pub fn stream_layer<R: RomSource>(
     // Static 2×32 KiB (tweak in config if you like).
     static mut A: [u8; crate::config::STREAM_BLOCK_BYTES] = [0; crate::config::STREAM_BLOCK_BYTES];
     static mut B: [u8; crate::config::STREAM_BLOCK_BYTES] = [0; crate::config::STREAM_BLOCK_BYTES];
+    #[allow(static_mut_refs)]
     let pre = unsafe {
-        Prefetcher::new(
-            rom,
-            layer.offset as u64,
-            layer.len as u64,
-            &mut *(&raw mut A),
-            &mut *(&raw mut B),
-        )
+        let buf_a = slice::from_raw_parts_mut(addr_of_mut!(A) as *mut u8, A.len());
+        let buf_b = slice::from_raw_parts_mut(addr_of_mut!(B) as *mut u8, B.len());
+        Prefetcher::new(rom, layer.offset as u64, layer.len as u64, buf_a, buf_b)
     };
     let mut pf = pre;
     let total = layer.len as u64;

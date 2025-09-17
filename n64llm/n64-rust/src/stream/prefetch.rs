@@ -40,7 +40,7 @@ impl<'a, R: RomSource> Prefetcher<'a, R> {
         #[cfg(all(target_arch = "mips", not(test)))]
         unsafe {
             let dst = buf.as_mut_ptr();
-            let cart_addr = (crate::n64_sys::CART_ROM_BASE + self.cart_off) as u32;
+            let cart_addr = (crate::n64_sys::CART_ROM_BASE as u64 + self.cart_off) as u32;
             pi_dma_start(dst, cart_addr, want as u32);
         }
         #[cfg(any(test, not(target_arch = "mips")))]
