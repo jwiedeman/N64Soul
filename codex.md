@@ -21,7 +21,7 @@ After these tools are installed, build the Rust project with:
 
 ```bash
 cd n64llm/n64-rust
-cargo +nightly-2022-06-21 -Z build-std=core,alloc n64 build --release --features embed_assets
+cargo +nightly-2022-06-21 -Z build-std=core,alloc n64 build --features embed_assets
 ```
 
 Enabling the `embed_assets` feature ensures the ROM includes the exported weights and manifest files.
@@ -31,4 +31,7 @@ Building with `--features embed_assets` triggers the Python exporter defined in
 `build.rs`. Override the default settings with environment variables such as
 `N64_SOUL_MODEL_ID`, `N64_SOUL_DTYPE`, or `N64_SOUL_KEEP_LAYERS` before invoking
 `cargo-n64`. Set `N64_SOUL_SKIP_EXPORT=1` to reuse existing assets.
+
+`cargo-n64` automatically appends `--release` to the underlying `cargo build`
+command, so the resulting ROM uses optimized code paths by default.
 
