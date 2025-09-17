@@ -353,16 +353,3 @@ pub unsafe extern "C" fn stage1() -> ! {
     let stage2: extern "C" fn() -> ! = core::mem::transmute(rdram_stage2 as usize);
     stage2()
 }
-
-//
-// --- Panic Handler ---
-//
-
-#[panic_handler]
-fn panic(info: &core::panic::PanicInfo) -> ! {
-    // In production, you might output info via a debug port.
-    let _ = info;
-    loop {
-        // Halt on panic.
-    }
-}
