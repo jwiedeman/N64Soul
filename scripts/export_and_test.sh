@@ -45,7 +45,7 @@ fi
 # Build the ROM. The build script exports and validates fresh weights.
 (
   cd "$ROM_DIR" && \
-  cargo +"$TOOLCHAIN" -Z build-std=core,alloc n64 build --features embed_assets
+  cargo +"$TOOLCHAIN" -Z build-std=core,alloc n64 build -- --features embed_assets
 )
 
 # Confirm the assets exist for downstream tooling.

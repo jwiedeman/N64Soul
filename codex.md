@@ -21,7 +21,7 @@ After these tools are installed, build the Rust project with:
 
 ```bash
 cd n64llm/n64-rust
-cargo +nightly-2022-06-21 -Z build-std=core,alloc n64 build --features embed_assets
+cargo +nightly-2022-06-21 -Z build-std=core,alloc n64 build -- --features embed_assets
 ```
 
 Enabling the `embed_assets` feature ensures the ROM includes the exported weights and manifest files.
