@@ -168,7 +168,7 @@ fn loader_base(memsize: i32, stage2_size: i32) -> *mut u8 {
 
 /// Compute the new stack pointer for Stage2.
 /// Adjust this as required by your memory layout.
-fn stack2_top(memsize: i32, _stage2_size: i32) -> u32 {
+fn stack2_top(_memsize: i32, _stage2_size: i32) -> u32 {
     // For example, use DMEM at 0xA4000000 plus an offset.
     0xA4000000 + 4096
 }
@@ -301,13 +301,13 @@ pub unsafe extern "C" fn stage1() -> ! {
     // In production, read MI_VERSION and RI_SELECT.
     let bbplayer = ((*MI_VERSION) & 0xF0) == 0xB0 || read_volatile(RI_SELECT) != 0;
 
-    let memsize: i32;
+    let mut memsize: i32;
     if !bbplayer && read_volatile(RI_SELECT) == 0 {
         memsize = rdram_init(|chip, last| unsafe { mem_bank_init(chip, last) });
     } else {
         // For iQue hardware, use the OS-provided memory size.
         // Read from the special location 0xA0000318.
-        let mut size_ptr = 0xA0000318 as *mut u32;
+        let size_ptr = 0xA0000318 as *mut u32;
         memsize = read_volatile(size_ptr) as i32;
         // Adjust for special cases if necessary.
         if memsize == 0x800000 {
