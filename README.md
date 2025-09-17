@@ -92,7 +92,10 @@ The following environment variables control the exporter:
 - `N64_SOUL_KEEP_LAYERS` – keep only the last N transformer blocks.
 - `N64_SOUL_TUNE_CONFIG` – optional JSON file archived with the export.
 - `N64_SOUL_SKIP_EXPORT` – set to `1` to reuse the assets already on disk.
-- `N64_SOUL_EXPORT_SCRIPT` – point at an alternative exporter if needed.
+
+The build script always invokes `tools/export_gpt2_n64.py`. Adjust that script
+directly if you need to change export behavior; keeping a single exporter avoids
+stale artifacts from earlier experiments.
 
 Nintendo 64 ROMs also require the CIC-6102 boot code. Because that blob is
 copyrighted we cannot ship it; you must provide your own dump via

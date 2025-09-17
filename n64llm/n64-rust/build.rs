@@ -21,7 +21,6 @@ fn main() {
     println!("cargo:rerun-if-env-changed=N64_SOUL_DTYPE");
     println!("cargo:rerun-if-env-changed=N64_SOUL_KEEP_LAYERS");
     println!("cargo:rerun-if-env-changed=N64_SOUL_TUNE_CONFIG");
-    println!("cargo:rerun-if-env-changed=N64_SOUL_EXPORT_SCRIPT");
     println!("cargo:rerun-if-env-changed=PYTHON");
 
     if env::var_os("CARGO_FEATURE_EMBED_ASSETS").is_none() {
@@ -44,9 +43,7 @@ fn main() {
         .map(PathBuf::from)
         .unwrap_or_else(|| manifest_dir.clone());
 
-    let script_path = env::var("N64_SOUL_EXPORT_SCRIPT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| repo_root.join("tools").join("export_gpt2_n64.py"));
+    let script_path = repo_root.join("tools").join("export_gpt2_n64.py");
 
     if !script_path.exists() {
         panic!("export script not found at {}", script_path.display());
