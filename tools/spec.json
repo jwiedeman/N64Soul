@@ -1,7 +1,0 @@
-{
-  "layers": [
-    {"name": "tok_embeddings", "path": "tools/dummy/tok_emb.bin"},
-    {"name": "attn_q_0", "path": "tools/dummy/l0_q.bin"},
-    {"name": "attn_k_0", "path": "tools/dummy/l0_k.bin"}
-  ]
-}
