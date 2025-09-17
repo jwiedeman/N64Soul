@@ -22,7 +22,6 @@ export N64SOUL_TOOLCHAIN=nightly-2022-06-21
 
 rustup toolchain install "$N64SOUL_TOOLCHAIN"
 rustup component add rust-src --toolchain "$N64SOUL_TOOLCHAIN"
-rustup target add mips-nintendo64-none --toolchain "$N64SOUL_TOOLCHAIN"
 
 # Install cargo-n64 with the pinned toolchain.
 N64SOUL_TOOLCHAIN="$N64SOUL_TOOLCHAIN" bash tools/install_cargo_n64.sh
@@ -30,6 +29,13 @@ N64SOUL_TOOLCHAIN="$N64SOUL_TOOLCHAIN" bash tools/install_cargo_n64.sh
 # Optional utilities can use stable.
 cargo install nust64
 ```
+
+Rustup no longer ships a prebuilt `mips-nintendo64-none` standard library for any
+host platform, so attempting `rustup target add mips-nintendo64-none` now fails
+with `toolchain 'nightly-2022-06-21-…' does not support target`. That is
+expected—`cargo-n64` bundles the target specification and the build uses
+`-Zbuild-std=core,alloc` to compile the required crates from `rust-src`, so no
+additional `rustup target` installation is necessary.
 
 The `tools/install_cargo_n64.sh` script first attempts a stock
 `cargo +"$N64SOUL_TOOLCHAIN" install cargo-n64`. If that fails it clones upstream,

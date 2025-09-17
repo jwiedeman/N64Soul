@@ -9,16 +9,19 @@ rustup component add rust-src --toolchain nightly-2022-06-21
 
 # 2. Install cargo-n64 using the same nightly
 cargo +nightly-2022-06-21 install --git https://github.com/rust-console/cargo-n64.git --locked
-
-# 3. Add the target for the Nintendo 64
-rustup target add mips-nintendo64-none --toolchain nightly-2022-06-21
 ```
+
+`rustup` no longer provides a `mips-nintendo64-none` standard library, so
+attempting to add that target prints `toolchain 'nightly-2022-06-21-…' does not
+support target`. The build instead relies on the `rust-src` component together
+with `-Zbuild-std=core,alloc`, and `cargo-n64` bundles the target specification
+needed to invoke `rustc`.
 
 After these tools are installed, build the Rust project with:
 
 ```bash
 cd n64llm/n64-rust
-cargo +nightly-2022-06-21 n64 build --profile release --features embed_assets
+cargo +nightly-2022-06-21 -Z build-std=core,alloc n64 build --release --features embed_assets
 ```
 
 Enabling the `embed_assets` feature ensures the ROM includes the exported weights and manifest files.

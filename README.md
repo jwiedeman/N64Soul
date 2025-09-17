@@ -53,7 +53,6 @@ export N64SOUL_TOOLCHAIN=nightly-2022-06-21
 
 rustup toolchain install "$N64SOUL_TOOLCHAIN"
 rustup component add rust-src --toolchain "$N64SOUL_TOOLCHAIN"
-rustup target add mips-nintendo64-none --toolchain "$N64SOUL_TOOLCHAIN"
 
 # Install a patched cargo-n64; upstream 0.2.0 relies on the removed
 # `Error::backtrace` API and fails to build on current compilers.
@@ -61,6 +60,12 @@ N64SOUL_TOOLCHAIN="$N64SOUL_TOOLCHAIN" bash tools/install_cargo_n64.sh
 
 cargo install nust64
 ```
+
+Rustup no longer publishes a `mips-nintendo64-none` standard library, so running
+`rustup target add` now reports `toolchain 'nightly-2022-06-21-…' does not
+support target`. That failure is expected—`cargo-n64` provides the target
+specification and the build uses `-Zbuild-std=core,alloc` to compile `core` and
+`alloc` from the `rust-src` component.
 
 After installing these tools you can build and run the project as described
 below. Use `python tools/check_python_deps.py` to confirm the Python
@@ -86,7 +91,7 @@ export N64_SOUL_DTYPE=fp16
 export N64_SOUL_KEEP_LAYERS=8
 
 TOOLCHAIN="${N64SOUL_TOOLCHAIN:-nightly-2022-06-21}"
-cargo +"$TOOLCHAIN" -Z build-std=core,alloc n64 build --profile release --features embed_assets
+cargo +"$TOOLCHAIN" -Z build-std=core,alloc n64 build --release --features embed_assets
 ```
 
 Unset `N64_SOUL_KEEP_LAYERS` (or skip exporting entirely) to use the full model.
