@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO="https://github.com/rust-console/cargo-n64"
-TOOLCHAIN="${N64SOUL_TOOLCHAIN:-nightly-2022-06-21}"
+TOOLCHAIN="${N64SOUL_TOOLCHAIN:-nightly-2024-10-01}"
 
 echo "[cargo-n64] Trying upstream main first…"
 if cargo +"$TOOLCHAIN" install cargo-n64 --git "$REPO" --branch main --locked; then

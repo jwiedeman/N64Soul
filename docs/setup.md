@@ -14,11 +14,12 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 Then add the Nintendo 64 target and install the helper subcommand. The
 `mips-nintendo64-none` target disappeared from recent nightlies, so the build
-expects the pinned toolchain `nightly-2022-06-21`. Export the toolchain once so
-the helper scripts and docs remain in sync:
+expects the pinned toolchain `nightly-2024-10-01`. Export the toolchain once so
+the helper scripts and docs remain in sync, and because older toolchains ship a
+`cargo` that cannot parse the repository's lock file:
 
 ```bash
-export N64SOUL_TOOLCHAIN=nightly-2022-06-21
+export N64SOUL_TOOLCHAIN=nightly-2024-10-01
 
 rustup toolchain install "$N64SOUL_TOOLCHAIN"
 rustup component add rust-src --toolchain "$N64SOUL_TOOLCHAIN"
@@ -32,7 +33,7 @@ cargo install nust64
 
 Rustup no longer ships a prebuilt `mips-nintendo64-none` standard library for any
 host platform, so attempting `rustup target add mips-nintendo64-none` now fails
-with `toolchain 'nightly-2022-06-21-…' does not support target`. That is
+with `toolchain 'nightly-2024-10-01-…' does not support target`. That is
 expected—`cargo-n64` bundles the target specification and the build uses
 `-Zbuild-std=core,alloc` to compile the required crates from `rust-src`, so no
 additional `rustup target` installation is necessary.

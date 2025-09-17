@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROM_DIR="$ROOT_DIR/n64llm/n64-rust"
 ASSETS_DIR="$ROM_DIR/assets"
-TOOLCHAIN="${N64SOUL_TOOLCHAIN:-nightly-2022-06-21}"
+TOOLCHAIN="${N64SOUL_TOOLCHAIN:-nightly-2024-10-01}"
 
 cd "$ROOT_DIR"
 

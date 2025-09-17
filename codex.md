@@ -1,18 +1,21 @@
 # Codex Environment Setup
 
 The project targets the `mips-nintendo64-none` architecture and requires a nightly Rust toolchain to build. The `cargo-n64` subcommand is also needed. The recommended install commands are below.
+The pinned nightly supplies a `cargo` new enough to understand the repository's
+`Cargo.lock` format while keeping Nintendo 64 support working through
+`cargo-n64`.
 
 ```bash
 # 1. Install a pinned nightly toolchain and rust-src
-rustup toolchain install nightly-2022-06-21
-rustup component add rust-src --toolchain nightly-2022-06-21
+rustup toolchain install nightly-2024-10-01
+rustup component add rust-src --toolchain nightly-2024-10-01
 
 # 2. Install cargo-n64 using the same nightly
-cargo +nightly-2022-06-21 install --git https://github.com/rust-console/cargo-n64.git --locked
+cargo +nightly-2024-10-01 install --git https://github.com/rust-console/cargo-n64.git --locked
 ```
 
 `rustup` no longer provides a `mips-nintendo64-none` standard library, so
-attempting to add that target prints `toolchain 'nightly-2022-06-21-…' does not
+attempting to add that target prints `toolchain 'nightly-2024-10-01-…' does not
 support target`. The build instead relies on the `rust-src` component together
 with `-Zbuild-std=core,alloc`, and `cargo-n64` bundles the target specification
 needed to invoke `rustc`.
@@ -21,7 +24,7 @@ After these tools are installed, build the Rust project with:
 
 ```bash
 cd n64llm/n64-rust
-cargo +nightly-2022-06-21 -Z build-std=core,alloc n64 build -- --features embed_assets
+cargo +nightly-2024-10-01 -Z build-std=core,alloc n64 build -- --features embed_assets
 ```
 
 Enabling the `embed_assets` feature ensures the ROM includes the exported weights and manifest files.
