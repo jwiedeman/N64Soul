@@ -44,7 +44,7 @@ fi
 # Build the ROM. The build script exports and validates fresh weights.
 (
   cd "$ROM_DIR" && \
-  cargo +nightly -Z build-std=core,alloc n64 build --profile release --features embed_assets
+  cargo +nightly -Z build-std=core,alloc n64 build --release --features embed_assets
 )
 
 # Confirm the assets exist for downstream tooling.
