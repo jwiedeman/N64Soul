@@ -34,9 +34,9 @@ emulator insists.
 
 1. Build the ROM with embedded weights (for example by running
    `./scripts/export_and_test.sh`).
-2. Launch `scripts/emu_smoke.sh`; it verifies the assets and will attempt to
-   start `ares` if it is on your `PATH`. Otherwise it prints the ROM path so you
-   can open it manually.
+2. Launch `scripts/emu_smoke.sh`; it verifies the assets, rebuilds if no ROM is
+   present, and attempts to start `ares` or `mupen64plus`. If neither emulator is
+   on your `PATH` the script prints the ROM path so you can open it manually.
 3. Watch the boot log. You should see `[diag]` entries for the manifest probe,
    CRC sweep, and bandwidth benchmark before the keyboard UI appears.
 
