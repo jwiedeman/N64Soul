@@ -5,8 +5,10 @@ This repository experiments with running a language model on Nintendo 64 hardwar
 ## Project layout
 
 - **n64llm/n64-rust/** – Rust implementation with weight streaming, tokenizer, and ROM packaging.
+- **tools/export_gpt2_n64.py** – single exporter that distills Hugging Face models into the `weights.bin`/`weights.manifest.bin` pair consumed by the build.
 
-All development now lives in the Rust crate. It builds with `no_std` for the
+All development now lives in the Rust crate, and every weight export flows
+through the Python helper. The crate builds with `no_std` for the
 `mips-nintendo64-none` target and embeds assets at link time.
 
 ## Dev Quickstart (one command)
