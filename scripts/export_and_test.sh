@@ -11,9 +11,20 @@ cd "$ROOT_DIR"
 ( cd "$ROM_DIR" && cargo test --lib --features host --verbose )
 ( cd "$ROM_DIR" && cargo test --test host_sanity --features host --verbose )
 
+# Resolve a Python interpreter up front so we can run the export helpers on
+# systems where the executable is named `python3` (as on modern macOS).
+if command -v python >/dev/null 2>&1; then
+  PYTHON_BIN=python
+elif command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN=python3
+else
+  echo "error: Python interpreter not found. Install python3 and ensure it is on your PATH." >&2
+  exit 1
+fi
+
 # Verify Python dependencies needed for export if requested.
 if [ "${SKIP_PY_DEPS:-0}" != "1" ]; then
-  python tools/check_python_deps.py
+  "$PYTHON_BIN" tools/check_python_deps.py
 fi
 
 # Propagate build configuration to the exporter run by build.rs.
@@ -37,7 +48,7 @@ fi
 )
 
 # Confirm the assets exist for downstream tooling.
-python tools/validate_weights.py \
+"$PYTHON_BIN" tools/validate_weights.py \
   --bin "$ASSETS_DIR/weights.bin" \
   --man "$ASSETS_DIR/weights.manifest.bin" --crc
 
