@@ -42,10 +42,48 @@ else
   unset N64_SOUL_TUNE_CONFIG 2>/dev/null || true
 fi
 
+# Determine the IPL3 argument expected by cargo-n64.
+IPL3_ARGS=()
+if [[ -n "${N64SOUL_IPL3_BIN:-}" && -n "${N64SOUL_IPL3_FROM_ROM:-}" ]]; then
+  echo "error: set only one of N64SOUL_IPL3_BIN or N64SOUL_IPL3_FROM_ROM" >&2
+  exit 1
+elif [[ -n "${N64SOUL_IPL3_BIN:-}" ]]; then
+  if [[ ! -f "${N64SOUL_IPL3_BIN}" ]]; then
+    echo "error: N64SOUL_IPL3_BIN does not exist: ${N64SOUL_IPL3_BIN}" >&2
+    exit 1
+  fi
+  IPL3_ARGS=(--ipl3 "${N64SOUL_IPL3_BIN}")
+elif [[ -n "${N64SOUL_IPL3_FROM_ROM:-}" ]]; then
+  if [[ ! -f "${N64SOUL_IPL3_FROM_ROM}" ]]; then
+    echo "error: N64SOUL_IPL3_FROM_ROM does not exist: ${N64SOUL_IPL3_FROM_ROM}" >&2
+    exit 1
+  fi
+  IPL3_ARGS=(--ipl3-from-rom "${N64SOUL_IPL3_FROM_ROM}")
+elif [[ "${N64SOUL_IPL3_DUMMY:-0}" == "1" ]]; then
+  DUMMY_IPL3="$ROM_DIR/ipl3_dummy.bin"
+  if [[ ! -f "$DUMMY_IPL3" ]]; then
+    DUMMY_IPL3_PATH="$DUMMY_IPL3" "$PYTHON_BIN" - <<'PY'
+import os
+path = os.environ["DUMMY_IPL3_PATH"]
+os.makedirs(os.path.dirname(path), exist_ok=True)
+with open(path, "wb") as f:
+    f.write(b"\x00" * 4032)
+PY
+  fi
+  IPL3_ARGS=(--ipl3 "$DUMMY_IPL3")
+else
+  cat <<'EOF2' >&2
+error: cargo-n64 requires the CIC-6102 bootcode.
+Set N64SOUL_IPL3_BIN to a cic6102 dump, N64SOUL_IPL3_FROM_ROM to a ROM image,
+or export N64SOUL_IPL3_DUMMY=1 to build with a non-bootable placeholder.
+EOF2
+  exit 1
+fi
+
 # Build the ROM. The build script exports and validates fresh weights.
 (
   cd "$ROM_DIR" && \
-  cargo +"$TOOLCHAIN" -Z build-std=core,alloc n64 build -- --features embed_assets
+  cargo +"$TOOLCHAIN" -Z build-std=core,alloc n64 build "${IPL3_ARGS[@]}" -- --features embed_assets
 )
 
 # Confirm the assets exist for downstream tooling.
