@@ -1,7 +1,7 @@
 # TODO
 
 - [x] Confirm ROM layout and address mapping in `n64.ld` for `.model_weights`.
-- [x] Validate `weights.bin` against `weights.manifest.json` using `tools/validate_weights.py`.
+- [x] Validate `weights.bin` against `weights.manifest.bin` using `tools/validate_weights.py`.
 - [x] Implement efficient layer streaming with checkpoints in `memory_manager.rs`.
 - [x] Replace placeholder attention and FFN code with real transformer operations.
 - [x] Complete tokenizer and controller input logic in `tokenizer.rs` and `display.rs`.
