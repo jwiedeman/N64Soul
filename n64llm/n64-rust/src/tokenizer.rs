@@ -5,6 +5,7 @@ use crate::platform::pi;
 use crate::weights;
 use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
+use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt;
 

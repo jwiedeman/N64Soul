@@ -1,3 +1,4 @@
+#![cfg_attr(all(target_arch = "mips", not(test)), feature(asm_experimental_arch, naked_functions))]
 #![no_std]
 #![no_main]
 
@@ -14,6 +15,7 @@ mod weights_manifest_find;
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::alloc::Layout;
 use core::panic::PanicInfo;
 
 mod diag;
@@ -159,5 +161,12 @@ fn delay(ms: u32) {
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
     display::print_line("PANIC: System error occurred");
+    loop {}
+}
+
+#[cfg(not(test))]
+#[alloc_error_handler]
+fn alloc_error(_layout: Layout) -> ! {
+    display::print_line("ALLOC ERROR: Out of memory");
     loop {}
 }
