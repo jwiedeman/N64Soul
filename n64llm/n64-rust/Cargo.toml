@@ -2,6 +2,7 @@
 name = "n64_gpt"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
 description = "A no_std Nintendo 64 GPT project."
 authors = ["Your Name <your.email@example.com>"]
 license = "MIT OR Apache-2.0"

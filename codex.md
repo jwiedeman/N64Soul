@@ -24,3 +24,8 @@ cargo +nightly-2022-06-21 n64 build --profile release --features embed_assets
 Enabling the `embed_assets` feature ensures the ROM includes the exported weights and manifest files.
 
 This produces a bootable ROM under `target/n64/release/` which can be run in an emulator such as `mupen64plus`.
+Building with `--features embed_assets` triggers the Python exporter defined in
+`build.rs`. Override the default settings with environment variables such as
+`N64_SOUL_MODEL_ID`, `N64_SOUL_DTYPE`, or `N64_SOUL_KEEP_LAYERS` before invoking
+`cargo-n64`. Set `N64_SOUL_SKIP_EXPORT=1` to reuse existing assets.
+

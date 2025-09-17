@@ -1,25 +1,37 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 0) Sanity: confirm assets exist where the code expects them.
-ASSETS="n64llm/n64-rust/assets"
-[[ -f "$ASSETS/weights.bin" ]] || { echo "Joshua: please move your weights to $ASSETS/weights.bin"; exit 1; }
-[[ -f "$ASSETS/weights.manifest.bin" ]] || { echo "Joshua: please move your manifest to $ASSETS/weights.manifest.bin"; exit 1; }
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROM_DIR="$ROOT_DIR/n64llm/n64-rust"
+ASSETS="$ROM_DIR/assets"
+ROM_GLOB="$ROM_DIR/target"/n64/release/*.z64
 
-# 1) Build (no moving binaries).
-PACK_ROM=1 cargo build --release --features embed_assets
+cd "$ROOT_DIR"
 
-# 2) Find the produced ROM and run emulator if available.
-ROM="$(ls -1 target/**/release/*.z64 2>/dev/null | head -n1 || true)"
-if [[ -z "${ROM}" ]]; then
-  echo "No .z64 found. Joshua: please tell me where your packed ROM is written."
+[[ -f "$ASSETS/weights.bin" ]] || { echo "weights.bin missing under $ASSETS"; exit 1; }
+[[ -f "$ASSETS/weights.manifest.bin" ]] || { echo "weights.manifest.bin missing under $ASSETS"; exit 1; }
+
+ROM_PATH=$(ls -1 $ROM_GLOB 2>/dev/null | head -n1 || true)
+if [[ -z "$ROM_PATH" ]]; then
+  echo "No ROM found; rebuilding with existing assets."
+  (
+    cd "$ROM_DIR" && \
+    N64_SOUL_SKIP_EXPORT=1 cargo +nightly -Z build-std=core,alloc n64 build --profile release --features embed_assets
+  )
+  ROM_PATH=$(ls -1 $ROM_GLOB 2>/dev/null | head -n1 || true)
+fi
+
+if [[ -z "$ROM_PATH" ]]; then
+  echo "Unable to locate the built ROM under $ROM_DIR/target."
   exit 1
 fi
-echo "ROM: ${ROM}"
 
-# Try ares if on PATH; otherwise just print path.
+echo "ROM: $ROM_PATH"
+
 if command -v ares >/dev/null 2>&1; then
-  ares "${ROM}"
+  ares "$ROM_PATH"
+elif command -v mupen64plus >/dev/null 2>&1; then
+  mupen64plus "$ROM_PATH"
 else
-  echo "ares not found. Joshua: launch your emulator manually with ${ROM}"
+  echo "No emulator found in PATH; launch your preferred emulator manually."
 fi
