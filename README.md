@@ -91,7 +91,7 @@ export N64_SOUL_DTYPE=fp16
 export N64_SOUL_KEEP_LAYERS=8
 
 TOOLCHAIN="${N64SOUL_TOOLCHAIN:-nightly-2022-06-21}"
-cargo +"$TOOLCHAIN" -Z build-std=core,alloc n64 build --release --features embed_assets
+cargo +"$TOOLCHAIN" -Z build-std=core,alloc n64 build --features embed_assets
 ```
 
 Unset `N64_SOUL_KEEP_LAYERS` (or skip exporting entirely) to use the full model.
@@ -106,6 +106,9 @@ The following environment variables control the exporter:
 The build script always invokes `tools/export_gpt2_n64.py`. Adjust that script
 directly if you need to change export behavior; keeping a single exporter avoids
 stale artifacts from earlier experiments.
+
+`cargo-n64` automatically forwards `--release` to the inner `cargo build` call,
+so the wrapper will produce an optimized ROM without additional flags.
 
 Nintendo 64 ROMs also require the CIC-6102 boot code. Because that blob is
 copyrighted we cannot ship it; you must provide your own dump via
