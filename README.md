@@ -114,6 +114,15 @@ Nintendo 64 ROMs also require the CIC-6102 boot code. Because that blob is
 copyrighted we cannot ship it; you must provide your own dump via
 `--ipl3 /path/to/cic6102.bin` or extract it from a known-good ROM with
 `--ipl3-from-rom /path/to/rom.z64` when running `cargo-n64`.
+Helper scripts such as `scripts/export_and_test.sh` and `scripts/emu_smoke.sh`
+forward the boot code automatically when one of the following environment
+variables is set before invocation:
+
+- `N64SOUL_IPL3_BIN` – absolute or relative path to a CIC-6102 dump.
+- `N64SOUL_IPL3_FROM_ROM` – path to a ROM image; `cargo-n64` extracts the
+  boot code automatically.
+- `N64SOUL_IPL3_DUMMY=1` – generate a zeroed placeholder so the ROM packages
+  successfully (non-bootable, useful for CI smoke tests).
 
 On success `cargo-n64` produces `target/n64/release/n64_gpt.z64`. The linker and
 configuration reserve roughly 1&nbsp;GiB of cart ROM space; the actual usable size
