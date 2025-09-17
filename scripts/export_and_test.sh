@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROM_DIR="$ROOT_DIR/n64llm/n64-rust"
 ASSETS_DIR="$ROM_DIR/assets"
+TOOLCHAIN="${N64SOUL_TOOLCHAIN:-nightly-2022-06-21}"
 
 cd "$ROOT_DIR"
 
@@ -44,7 +45,7 @@ fi
 # Build the ROM. The build script exports and validates fresh weights.
 (
   cd "$ROM_DIR" && \
-  cargo +nightly -Z build-std=core,alloc n64 build --release --features embed_assets
+  cargo +"$TOOLCHAIN" -Z build-std=core,alloc n64 build --release --features embed_assets
 )
 
 # Confirm the assets exist for downstream tooling.

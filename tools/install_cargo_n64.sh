@@ -2,9 +2,10 @@
 set -euo pipefail
 
 REPO="https://github.com/rust-console/cargo-n64"
+TOOLCHAIN="${N64SOUL_TOOLCHAIN:-nightly-2022-06-21}"
 
 echo "[cargo-n64] Trying upstream main first…"
-if cargo +nightly install cargo-n64 --git "$REPO" --branch main --locked; then
+if cargo +"$TOOLCHAIN" install cargo-n64 --git "$REPO" --branch main --locked; then
   echo "[cargo-n64] Installed from upstream main."
   exit 0
 fi
@@ -22,6 +23,6 @@ sed -i '/^\s*#!\[feature(backtrace)\]\s*$/d' src/lib.rs || true
 perl -0777 -pe 's/error\s*\.\s*backtrace\s*\(\s*\)/None::<&std::backtrace::Backtrace>/g' -i src/lib.rs
 
 # Install the patched tool
-cargo +nightly install --path . --locked
+cargo +"$TOOLCHAIN" install --path . --locked
 popd >/dev/null
 echo "[cargo-n64] Installed from patched tree."
