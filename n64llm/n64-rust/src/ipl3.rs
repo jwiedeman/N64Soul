@@ -7,6 +7,8 @@
 //! so that the sections (.header, .banner, .stage1.pre, .stage1) are
 //! mapped to the correct addresses.
 
+#![allow(dead_code)]
+
 use core::arch::asm;
 use core::ptr::{read_volatile, write_volatile};
 

@@ -1,5 +1,7 @@
-// n64_sys.rs
-// System definitions for Nintendo 64 hardware
+//! n64_sys.rs
+//! System definitions for Nintendo 64 hardware
+
+#![allow(dead_code)]
 
 // PI (Peripheral Interface) Registers
 pub const PI_BASE_REG: usize = 0xA4600000;

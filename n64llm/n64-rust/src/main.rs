@@ -82,7 +82,7 @@ pub extern "C" fn main() -> ! {
             display::print_line("Working...");
 
             let output_text = {
-                let mut tokenizer = match tokenizer::Tokenizer::new(&manifest, &mut memory) {
+                let tokenizer = match tokenizer::Tokenizer::new(&manifest, &mut memory) {
                     Ok(tok) => tok,
                     Err(e) => {
                         display::print_line(&format!("Tokenizer error: {}", e));

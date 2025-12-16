@@ -1,5 +1,7 @@
-// CP0 Count increments at ~CPU/2. Common N64 value ~46_875_000 Hz (93.75 MHz / 2).
-// Adjust COUNT_HZ if your environment differs.
+//! CP0 Count increments at ~CPU/2. Common N64 value ~46_875_000 Hz (93.75 MHz / 2).
+//! Adjust COUNT_HZ if your environment differs.
+
+#![allow(dead_code)]
 pub const COUNT_HZ: u64 = 46_875_000;
 
 #[inline(always)]

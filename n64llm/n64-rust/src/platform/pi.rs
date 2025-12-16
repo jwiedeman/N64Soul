@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use core::ptr::{read_volatile, write_volatile};
 use crate::n64_sys::{
     PI_DRAM_ADDR_REG, PI_CART_ADDR_REG, PI_RD_LEN_REG, PI_STATUS_REG,

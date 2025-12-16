@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::platform::cart::RomSource;
 use crate::stream::prefetch::Prefetcher;
 use crate::manifest::Manifest;

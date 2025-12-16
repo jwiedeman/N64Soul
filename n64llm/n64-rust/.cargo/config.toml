@@ -1,4 +1,10 @@
 [target.mips-nintendo64-none]
-runner = ["cargo-n64", "run", "--ipl3", "6102"]
+# Use nust64 instead of cargo-n64 (supports ROMs >1MB)
+# Install with: cargo install nust64
+runner = ["nust64", "--ipl3", "ipl3_dummy.bin"]
 rustflags = ["-C", "link-arg=-Tn64.ld", "-C", "target-feature=+soft-float"]
+
+[alias]
+# Build ROM: cargo n64-build
+n64-build = "build -Z build-std=core,alloc --target mips-nintendo64-none --release"
 

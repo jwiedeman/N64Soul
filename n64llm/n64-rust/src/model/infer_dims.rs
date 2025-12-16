@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::{model::dims::ModelDims, weights_manifest::ManifestView};
 use crate::weights_manifest_find::find;
 
