@@ -1,4 +1,4 @@
-#![cfg_attr(all(target_arch = "mips", not(test)), feature(asm_experimental_arch, naked_functions))]
+#![cfg_attr(all(target_arch = "mips", not(test)), feature(asm_experimental_arch, naked_functions, alloc_error_handler))]
 #![no_std]
 #![no_main]
 
