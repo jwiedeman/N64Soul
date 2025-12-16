@@ -3,10 +3,11 @@
 
 ROM_NAME = n64_gpt
 IPL3 = ipl3_dummy.bin
-TARGET = mips-nintendo64-none
+TARGET_JSON = mips-nintendo64-none.json
+TARGET_DIR = mips-nintendo64-none
 PROFILE = release
 
-ELF = target/$(TARGET)/$(PROFILE)/$(ROM_NAME)
+ELF = target/$(TARGET_DIR)/$(PROFILE)/$(ROM_NAME)
 ROM = $(ROM_NAME).n64
 
 # Default: build the ROM
@@ -15,13 +16,13 @@ all: $(ROM)
 # Build ELF with cargo
 $(ELF): FORCE
 	cargo +nightly -Z build-std=core,alloc build \
-		--target $(TARGET) \
+		--target $(TARGET_JSON) \
 		--$(PROFILE) \
 		--features embed_assets
 
 # Convert ELF to N64 ROM using nust64
 $(ROM): $(ELF)
-	nust64 --ipl3 $(IPL3) $(ELF) $(ROM)
+	nust64 --elf $(ELF) --ipl3 $(IPL3) --output $(ROM)
 	@echo "Built: $(ROM) ($$(du -h $(ROM) | cut -f1))"
 
 # Build with fewer layers for smaller ROM (default: 1 layer)
