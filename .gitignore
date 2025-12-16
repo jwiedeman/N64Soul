@@ -8,4 +8,9 @@
 # Model blobs (never commit)
 /n64llm/n64-rust/assets/weights*.bin
 
+# Build artifacts
 artifacts/exports/**
+**/artifacts/
+
+# Generated IPL3 dummy
+ipl3_dummy.bin

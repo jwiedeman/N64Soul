@@ -1,4 +1,4 @@
-#![cfg_attr(all(target_arch = "mips", not(test)), feature(asm_experimental_arch, naked_functions, alloc_error_handler))]
+#![cfg_attr(all(target_arch = "mips", not(test)), feature(asm_experimental_arch, alloc_error_handler))]
 #![no_std]
 #![no_main]
 
@@ -6,6 +6,12 @@ extern crate alloc;
 mod config;
 mod ipl3;
 mod n64_math;
+
+// Force the linker to include boot code entry point
+#[cfg(target_arch = "mips")]
+#[used]
+#[link_section = ".rodata"]
+static BOOT_ENTRY: unsafe extern "C" fn() -> ! = ipl3::_start;
 mod n64_sys;
 mod platform;
 mod weights;

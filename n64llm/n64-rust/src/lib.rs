@@ -1,4 +1,4 @@
-#![cfg_attr(all(target_arch = "mips", not(test)), feature(asm, asm_experimental_arch, naked_functions))]
+#![cfg_attr(all(target_arch = "mips", not(test)), feature(asm_experimental_arch))]
 #![cfg_attr(not(any(test, feature = "host")), no_std)]
 
 extern crate alloc;

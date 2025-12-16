@@ -1,19 +1,28 @@
 /* n64.ld – Working N64 Linker Script for a 4MB Base Console */
 
-/* Set the entry point. Your Rust code should define _start. */
-ENTRY(_start)
+/* Set the entry point. stage1pre is the boot entry point. */
+ENTRY(stage1pre)
 
 MEMORY
 {
+    /* Boot region: RDRAM at N64 boot address (0x80000400) */
+    BOOT (rwx) : ORIGIN = 0x80000400, LENGTH = 1M
+
     /* ROM region: model and code stored on cart */
     ROM (rx)  : ORIGIN = 0x10000000, LENGTH = 1024M
 
     /* RDRAM region: allow for expansion pak */
-    RDRAM (rwx) : ORIGIN = 0x80000000, LENGTH = 8M
+    RDRAM (rwx) : ORIGIN = 0x80100400, LENGTH = 7M
 }
 
 SECTIONS
 {
+    /* .boot: Boot code must be at 0x80000400 for N64 */
+    .boot : ALIGN(4)
+    {
+        *(.boot*)
+    } > BOOT
+
     /* .text: All executable code goes into ROM */
     .text : ALIGN(4)
     {
