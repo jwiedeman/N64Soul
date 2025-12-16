@@ -7,7 +7,7 @@
 //! so that the sections (.header, .banner, .stage1.pre, .stage1) are
 //! mapped to the correct addresses.
 
-use core::arch::asm;
+use core::arch::{asm, naked_asm};
 use core::ptr::{read_volatile, write_volatile};
 
 //
@@ -267,89 +267,36 @@ unsafe fn mem_bank_init(chip_id: i32, last: bool) {
 // --- Stage1 Pre and Stage1 Boot Functions ---
 //
 
-/// Stage1pre: sets up the initial stack pointer and jumps to stage1.
-/// Placed in a dedicated section with no function prologue/epilogue.
-#[naked]
+/// _start: N64 entry point - sets up stack and jumps to stage1.
+/// Placed in .boot section for cargo-n64 compatibility.
+#[unsafe(naked)]
 #[no_mangle]
-#[link_section = ".stage1.pre"]
-pub unsafe extern "C" fn stage1pre() -> ! {
-    asm!(
+#[link_section = ".boot"]
+pub unsafe extern "C" fn _start() -> ! {
+    naked_asm!(
         "lui $sp, 0xA400",
         "ori $sp, $sp, 0x0FF0",
         "j stage1",
         "nop",
-        options(noreturn)
     );
 }
 
-/// Stage1: performs early initialization, loads Stage2, and jumps to it.
-#[no_mangle]
-#[link_section = ".stage1"]
-pub unsafe extern "C" fn stage1() -> ! {
-    // Early peripheral initialization.
-    entropy_init();
-    usb_init();
-    debugf("Libdragon IPL3");
+// Declare main entry point from the binary
+extern "C" {
+    fn main() -> !;
+}
 
-    // Reset CP0 registers.
+/// Stage1: simplified boot - sets up CP0 and jumps to main.
+/// For emulator testing, the IPL3 bootcode handles RDRAM init.
+#[no_mangle]
+#[link_section = ".boot"]
+pub unsafe extern "C" fn stage1() -> ! {
+    // Reset CP0 registers for clean state
     c0_write_cause(0);
     c0_write_count(0);
     c0_write_compare(0);
     c0_write_watchlo(0);
 
-    // Determine if we’re running on iQue hardware.
-    // In production, read MI_VERSION and RI_SELECT.
-    let bbplayer = ((*MI_VERSION) & 0xF0) == 0xB0 || read_volatile(RI_SELECT) != 0;
-
-    let mut memsize: i32;
-    if !bbplayer && read_volatile(RI_SELECT) == 0 {
-        memsize = rdram_init(|chip, last| unsafe { mem_bank_init(chip, last) });
-    } else {
-        // For iQue hardware, use the OS-provided memory size.
-        // Read from the special location 0xA0000318.
-        let size_ptr = 0xA0000318 as *mut u32;
-        memsize = read_volatile(size_ptr) as i32;
-        // Adjust for special cases if necessary.
-        if memsize == 0x800000 {
-            memsize = 0x7C0000;
-        }
-    }
-
-    debugf("Total memory initialized");
-
-    // Clear the first 0x400 bytes (preserved for boot flags).
-    rsp_bzero_init(bbplayer);
-    rsp_bzero_async(0xA0000400, memsize - 0x400 - TOTAL_RESERVED_SIZE);
-
-    // Clear caches.
-    cop0_clear_cache();
-
-    // Load Stage2:
-    // Obtain Stage2 start address from external symbol.
-    let stage2_addr = &__stage2_start as *const u32 as u32;
-    // Read stage2 size from ROM at stage2_addr.
-    let stage2_size = io_read(stage2_addr) as i32;
-    // Stage2 binary starts 8 bytes after the header.
-    let stage2_start = stage2_addr.wrapping_add(8);
-
-    // Calculate destination in RDRAM for Stage2.
-    let rdram_stage2 = loader_base(memsize, stage2_size);
-
-    // Set up DMA transfer:
-    write_volatile(PI_DRAM_ADDR, rdram_stage2 as u32);
-    // Adjust cart address to remove cached bit (RDRAM is mapped at 0xA0000000).
-    write_volatile(PI_CART_ADDR, stage2_start.wrapping_sub(RDRAM_BASE));
-    // Wait for any pending PI DMA.
-    while read_volatile(PI_STATUS) & 1 != 0 {}
-    write_volatile(PI_WR_LEN, stage2_size.wrapping_sub(1) as u32);
-
-    // Ensure memory writes complete.
-    memory_barrier();
-
-    // Set up stack pointer for Stage2.
-    asm!("move $sp, {0}", in(reg) stack2_top(memsize, stage2_size), options(nostack));
-
-    // Jump to Stage2.
-    let stage2: extern "C" fn() -> ! = core::mem::transmute(rdram_stage2 as usize);
-    stage2()
+    // Jump to the Rust main function
+    main()
 }
