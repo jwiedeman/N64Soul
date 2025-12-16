@@ -1,5 +1,7 @@
-// memory_manager.rs
-// Memory management for N64's limited RAM
+//! memory_manager.rs
+//! Memory management for N64's limited RAM
+
+#![allow(dead_code)]
 
 use core::alloc::{GlobalAlloc, Layout};
 use core::cell::UnsafeCell;

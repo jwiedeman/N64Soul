@@ -242,7 +242,7 @@ fn pre_tokenize(text: &str) -> Vec<String> {
             continue;
         }
 
-        let mut start = i;
+        let start = i;
         let mut has_space_prefix = false;
         if chars[i] == ' ' {
             has_space_prefix = true;

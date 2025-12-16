@@ -1,5 +1,7 @@
-// display.rs
-// N64 display handling
+//! display.rs
+//! N64 display handling
+
+#![allow(dead_code)]
 
 use alloc::string::String;
 use alloc::format;

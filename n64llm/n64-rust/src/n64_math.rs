@@ -1,5 +1,7 @@
-// n64_math.rs
-// Basic math functions needed for N64 development
+//! n64_math.rs
+//! Basic math functions needed for N64 development
+
+#![allow(dead_code)]
 
 pub const PI: f32 = 3.14159265358979323846;
 
