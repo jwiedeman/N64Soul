@@ -439,7 +439,6 @@ pub fn show_progress(current: usize, total: usize) {
 
 pub fn print_probe_result(off: u64, ok: bool, bytes: &[u8]) {
     // Example: "0x18000000  OK  12 34 56 78 9A BC DE F0"
-    use core::fmt::Write;
     let mut buf = heapless::String::<96>::new();
     let _ = write!(
         &mut buf, "0x{off:08X}  {}  ",

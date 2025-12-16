@@ -12,7 +12,7 @@ pub static MODEL_WEIGHTS: [u8; { include_bytes!(concat!(env!("CARGO_MANIFEST_DIR
 pub fn weights_rom_base() -> u32 {
     // Get the address of MODEL_WEIGHTS as a ROM address
     // The static is in ROM so we just need its address relative to cart base
-    unsafe { MODEL_WEIGHTS.as_ptr() as u32 }
+    MODEL_WEIGHTS.as_ptr() as u32
 }
 #[cfg(feature = "embed_assets")]
 #[inline(always)]
