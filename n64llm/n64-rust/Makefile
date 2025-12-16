@@ -21,9 +21,8 @@ $(ELF): FORCE
 		--features embed_assets
 
 # Convert ELF to N64 ROM using nust64
-# Usage: nust64 [OPTIONS] <ELF> <ROM>
 $(ROM): $(ELF)
-	nust64 --ipl3 $(IPL3) $(ELF) $(ROM)
+	nust64 --elf $(ELF) --ipl3 $(IPL3) $(ROM)
 	@echo "Built: $(ROM) ($$(du -h $(ROM) | cut -f1))"
 
 # Build with fewer layers for smaller ROM (default: 1 layer)
