@@ -7,7 +7,7 @@
 //! so that the sections (.header, .banner, .stage1.pre, .stage1) are
 //! mapped to the correct addresses.
 
-use core::arch::{asm, naked_asm};
+use core::arch::asm;
 use core::ptr::{read_volatile, write_volatile};
 
 //
@@ -269,15 +269,16 @@ unsafe fn mem_bank_init(chip_id: i32, last: bool) {
 
 /// _start: N64 entry point - sets up stack and jumps to stage1.
 /// Placed in .boot section for cargo-n64 compatibility.
-#[unsafe(naked)]
+#[naked]
 #[no_mangle]
 #[link_section = ".boot"]
 pub unsafe extern "C" fn _start() -> ! {
-    naked_asm!(
+    asm!(
         "lui $sp, 0xA400",
         "ori $sp, $sp, 0x0FF0",
         "j stage1",
         "nop",
+        options(noreturn)
     );
 }
 
