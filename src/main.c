@@ -162,8 +162,8 @@ int main(void) {
             // Set render context for all render functions
             render_set_context(disp);
 
-            // Clear screen
-            graphics_fill_screen(disp, 0x000000FF);
+            // Clear screen to dark blue (Skunkworks terminal style)
+            graphics_fill_screen(disp, graphics_make_color(0, 0, 32, 255));
 
             // Render based on state
             switch (ui.current_state) {

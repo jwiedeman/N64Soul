@@ -34,7 +34,7 @@ void render_init(RenderSettings* settings) {
     settings->show_histogram = 1;
     settings->show_gradients = 0;
     settings->show_activations = 1;
-    settings->scanlines_enabled = 1;
+    settings->scanlines_enabled = 0;  // Disabled by default - too aggressive
     settings->show_metrics = 1;
     settings->histogram_layer = -1;  // All layers
     settings->animation_speed = 1;
