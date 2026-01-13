@@ -1,17 +1,8 @@
-# PROJECT NEURON - Internal Makefile for libdragon container
-# This runs inside the Docker container
+# PROJECT NEURON - Makefile for libdragon
+# Uses n64.mk build system
 
-PROJECT_NAME = neuron
 BUILD_DIR = build
-
-# Source files
-SOURCES = src/main.c \
-          src/neural_net.c \
-          src/training.c \
-          src/pong.c \
-          src/render.c \
-          src/ui.c \
-          src/save.c
+SOURCE_DIR = src
 
 # Detect N64_INST if not set (Docker container uses /n64_toolchain)
 ifeq ($(N64_INST),)
@@ -21,36 +12,26 @@ endif
 # Include libdragon build system
 include $(N64_INST)/include/n64.mk
 
-# Object files
-OBJS = $(SOURCES:src/%.c=$(BUILD_DIR)/%.o)
+# Source files in src/ directory
+SRCS = main.c neural_net.c training.c pong.c render.c ui.c save.c
+OBJS = $(SRCS:%.c=$(BUILD_DIR)/%.o)
 
-# Compiler flags
-N64_CFLAGS += -I./include -O2 -ffast-math -Wall -Wno-unused-function
+# Add extra include path (n64.mk already sets base flags)
+N64_CFLAGS += -I./include -Wno-unused-function
 
-# ROM title
+# ROM configuration
 N64_ROM_TITLE = "PROJECT NEURON"
 
-.PHONY: all clean
+# Default target
+all: neuron.z64
 
-all: $(PROJECT_NAME).z64
+# n64.mk provides pattern rules for .o from .c in SOURCE_DIR
+# and pattern rules for .z64 from .elf
+neuron.z64: $(BUILD_DIR)/neuron.elf
+$(BUILD_DIR)/neuron.elf: $(OBJS)
 
-# Compile C files
-$(BUILD_DIR)/%.o: src/%.c
-	@mkdir -p $(BUILD_DIR)
-	@echo "CC $<"
-	@$(CC) -c $(CFLAGS) $(N64_CFLAGS) -o $@ $<
-
-# Link ELF
-$(BUILD_DIR)/$(PROJECT_NAME).elf: $(OBJS)
-	@echo "LD $@"
-	@$(LD) -o $@ $^ $(LDFLAGS) $(N64_LDFLAGS) -ldragon -lc -lm -ldragonsys
-
-# Create ROM
-$(PROJECT_NAME).z64: $(BUILD_DIR)/$(PROJECT_NAME).elf
-	@echo "ROM $@"
-	@rm -f $@
-	@$(N64_TOOL) $(N64_TOOLFLAGS) -o $@ --title "PROJECT NEURON" $<
-	@$(N64_CHKSUM) $@ >/dev/null
-
+# Clean target
 clean:
-	rm -rf $(BUILD_DIR) $(PROJECT_NAME).z64
+	rm -rf $(BUILD_DIR) neuron.z64
+
+.PHONY: all clean
