@@ -15,6 +15,10 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Debug libdragon paths
+      run: |
+        docker run --rm ghcr.io/dragonminded/libdragon:latest sh -c "echo N64_INST=\$N64_INST && ls -la \$N64_INST 2>/dev/null || echo 'N64_INST not set or invalid' && find / -name 'n64.mk' 2>/dev/null | head -5"
+
     - name: Build ROM with libdragon Docker
       run: |
         docker run --rm \
