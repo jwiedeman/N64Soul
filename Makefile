@@ -1,64 +1,73 @@
 # PROJECT NEURON - Makefile
 # N64 Neural Network Visualization System
+# Built with libdragon
 
-# Configuration
-ROM_NAME = neuron
-BUILD_DIR = build
+# Project name
+PROJECT_NAME = neuron
 
 # Source files
-SRCS = src/main.c \
-       src/neural_net.c \
-       src/training.c \
-       src/pong.c \
-       src/render.c \
-       src/ui.c \
-       src/save.c
+SOURCES = src/main.c \
+          src/neural_net.c \
+          src/training.c \
+          src/pong.c \
+          src/render.c \
+          src/ui.c \
+          src/save.c
 
-# libdragon setup
+# Include libdragon build system
 include $(N64_INST)/include/n64.mk
 
-# Include paths
-N64_CFLAGS += -I./include
+# Additional include paths
+CFLAGS += -I./include
 
-# Optimization flags
-N64_CFLAGS += -O2 -ffast-math
+# Optimization
+CFLAGS += -O2 -ffast-math
 
-# ROM configuration
-N64_ROM_TITLE = "PROJECT NEURON"
-N64_ROM_SAVETYPE = eeprom4k  # For settings
-N64_ROM_REGIONFREE = true
+# Build the ROM
+all: $(PROJECT_NAME).z64
 
-all: $(ROM_NAME).z64
+# Source to object mapping
+OBJS = $(SOURCES:%.c=build/%.o)
 
-# Filesystem for assets
-ASSETS = $(wildcard assets/fonts/*.sprite) \
-         $(wildcard assets/sprites/*.sprite) \
-         $(wildcard assets/checkpoints/*.bin)
-
-filesystem/%.sprite: assets/%.png
+# Compile source files
+build/%.o: %.c
 	@mkdir -p $(dir $@)
-	$(N64_MKSPRITE) -f RGBA16 $< $@
+	$(CC) -c $(CFLAGS) -o $@ $<
 
-$(BUILD_DIR)/$(ROM_NAME).dfs: $(ASSETS)
-	@mkdir -p $(BUILD_DIR)
+# Link
+build/$(PROJECT_NAME).elf: $(OBJS)
+	$(LD) -o $@ $^ $(LDFLAGS) -ldragon -lc -lm -ldragonsys
+
+# Build filesystem (if we have assets)
+ASSETS_LIST = $(wildcard assets/fonts/*.png) \
+              $(wildcard assets/sprites/*.png)
+
+ifneq ($(ASSETS_LIST),)
+filesystem/font.sprite: assets/fonts/font.png
+	@mkdir -p $(dir $@)
+	$(N64_MKSPRITE) -f RGBA16 -o $@ $<
+
+build/$(PROJECT_NAME).dfs: $(ASSETS_LIST:assets/%.png=filesystem/%.sprite)
+	@mkdir -p build
 	$(N64_MKDFS) $@ filesystem/
 
-$(BUILD_DIR)/$(ROM_NAME).elf: $(SRCS:%.c=$(BUILD_DIR)/%.o)
-	@mkdir -p $(BUILD_DIR)
-	$(N64_LD) -o $@ $^ $(N64_LDFLAGS)
+$(PROJECT_NAME).z64: build/$(PROJECT_NAME).elf build/$(PROJECT_NAME).dfs
+	$(N64_TOOL) $(N64_FLAGS) -o $@ --title "PROJECT NEURON" \
+		--toc build/$(PROJECT_NAME).elf \
+		--dfs build/$(PROJECT_NAME).dfs
+else
+$(PROJECT_NAME).z64: build/$(PROJECT_NAME).elf
+	$(N64_TOOL) $(N64_FLAGS) -o $@ --title "PROJECT NEURON" \
+		build/$(PROJECT_NAME).elf
+endif
 
-$(ROM_NAME).z64: $(BUILD_DIR)/$(ROM_NAME).elf $(BUILD_DIR)/$(ROM_NAME).dfs
-	$(N64_ROM) $@ $< -d $(BUILD_DIR)/$(ROM_NAME).dfs
-
-$(BUILD_DIR)/%.o: %.c
-	@mkdir -p $(dir $@)
-	$(N64_CC) $(N64_CFLAGS) -c -o $@ $<
-
+# Clean build artifacts
 clean:
-	rm -rf $(BUILD_DIR) filesystem/ $(ROM_NAME).z64
+	rm -rf build/ filesystem/ $(PROJECT_NAME).z64
 
-# Development helpers
+# Run in emulator (requires ares or similar in PATH)
+run: $(PROJECT_NAME).z64
+	@echo "ROM built: $(PROJECT_NAME).z64"
+	@echo "Run with: ares $(PROJECT_NAME).z64"
+
 .PHONY: all clean run
-
-run: $(ROM_NAME).z64
-	@echo "Run in emulator: ares $(ROM_NAME).z64"

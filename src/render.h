@@ -7,6 +7,7 @@
 #define RENDER_H
 
 #include <stdint.h>
+#include <libdragon.h>
 #include "../include/config.h"
 #include "neural_net.h"
 #include "training.h"
@@ -46,6 +47,13 @@ typedef struct {
  * @param settings Pointer to render settings
  */
 void render_init(RenderSettings* settings);
+
+/**
+ * Set the display context for rendering
+ * Must be called before any render functions each frame
+ * @param disp Display context from display_lock()
+ */
+void render_set_context(display_context_t disp);
 
 // =============================================================================
 // MAIN RENDER FUNCTION

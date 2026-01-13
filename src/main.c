@@ -157,8 +157,11 @@ int main(void) {
         // Get display context
         display_context_t disp = display_lock();
         if (disp) {
+            // Set render context for all render functions
+            render_set_context(disp);
+
             // Clear screen
-            graphics_fill_screen(disp, COLOR_VOID);
+            graphics_fill_screen(disp, 0x000000FF);
 
             // Render based on state
             switch (ui.current_state) {
