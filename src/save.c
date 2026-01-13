@@ -77,10 +77,9 @@ static uint32_t compute_crc32(const uint8_t* data, int length) {
 // =============================================================================
 
 int save_pak_present(int controller) {
-    // Check if controller pak is present
-    // libdragon's controller pak functions handle detection
-    int status = identify_accessory(controller);
-    return (status == ACCESSORY_MEMPAK);
+    // Check if controller pak is present using new joypad API
+    joypad_accessory_type_t type = joypad_get_accessory_type((joypad_port_t)controller);
+    return (type == JOYPAD_ACCESSORY_TYPE_CONTROLLER_PAK);
 }
 
 int save_pak_free_space(int controller) {
@@ -376,11 +375,11 @@ int save_read_header(int controller, SaveHeader* header) {
 
 void save_format_time(uint32_t seconds, char* buffer) {
     if (seconds < 60) {
-        snprintf(buffer, 16, "%ds", seconds);
+        snprintf(buffer, 16, "%lus", (unsigned long)seconds);
     } else if (seconds < 3600) {
-        snprintf(buffer, 16, "%dm %ds", seconds / 60, seconds % 60);
+        snprintf(buffer, 16, "%lum %lus", (unsigned long)(seconds / 60), (unsigned long)(seconds % 60));
     } else {
-        snprintf(buffer, 16, "%dh %dm",
-                 seconds / 3600, (seconds % 3600) / 60);
+        snprintf(buffer, 16, "%luh %lum",
+                 (unsigned long)(seconds / 3600), (unsigned long)((seconds % 3600) / 60));
     }
 }
