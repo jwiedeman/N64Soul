@@ -451,7 +451,15 @@ void nn_clear_gradients(NeuralNetwork* nn) {
 // =============================================================================
 
 void nn_update_vis_state(NeuralNetwork* nn) {
+    // Safety check - don't access if network not initialized
+    if (!nn || nn->num_layers < 2) return;
+
     for (int l = 1; l < nn->num_layers; l++) {
+        // Safety check for null pointers
+        if (!nn->prev_weights[l] || !nn->weights[l] || !nn->weight_flash[l]) {
+            continue;
+        }
+
         int prev_size = nn->layer_sizes[l - 1];
         int curr_size = nn->layer_sizes[l];
         int weight_count = curr_size * prev_size;

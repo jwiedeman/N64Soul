@@ -27,6 +27,7 @@ static ReplayBuffer replay_buffer;
 static PongState pong;
 static RenderSettings render_settings;
 static UIState ui;
+static int network_initialized = 0;  // Track if network allocation succeeded
 
 // =============================================================================
 // INITIALIZATION
@@ -55,9 +56,11 @@ static void init_all(void) {
     pong_init(&pong);
 
     // Initialize network with default tier
-    if (nn_init(&network, DEFAULT_TIER) != 0) {
-        // Fatal error - can't allocate network
-        // In real implementation, display error screen
+    if (nn_init(&network, DEFAULT_TIER) == 0) {
+        network_initialized = 1;
+    } else {
+        // Network allocation failed - will skip training features
+        network_initialized = 0;
     }
 }
 
@@ -169,10 +172,11 @@ int main(void) {
 
         ui_handle_input(&ui, btn_mask, inputs.stick_x, inputs.stick_y);
 
-        // Run simulation steps based on speed multiplier
-        if (ui.current_state == STATE_SIM_TRAINING ||
-            ui.current_state == STATE_SIM_PLAY ||
-            ui.current_state == STATE_SIM_WATCH) {
+        // Run simulation steps based on speed multiplier (only if network is initialized)
+        if (network_initialized &&
+            (ui.current_state == STATE_SIM_TRAINING ||
+             ui.current_state == STATE_SIM_PLAY ||
+             ui.current_state == STATE_SIM_WATCH)) {
 
             for (int i = 0; i < ui.speed_multiplier; i++) {
                 simulation_step();
