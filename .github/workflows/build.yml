@@ -10,16 +10,18 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/dragonminded/libdragon:latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Build ROM
+    - name: Build ROM with libdragon Docker
       run: |
-        make -f Makefile.n64 clean all
+        docker run --rm \
+          --mount type=bind,source=$(pwd),target=/project \
+          --workdir=/project \
+          ghcr.io/dragonminded/libdragon:latest \
+          make -f Makefile.n64 clean all
         ls -la *.z64 || echo "ROM not created"
 
     - name: Upload ROM artifact
