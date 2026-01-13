@@ -234,15 +234,15 @@ int main(void) {
             }
 
             display_show(disp);
-        }
 
-        // Update animation timers
-        ui.transition_timer++;
-        ui.cursor_blink_timer++;
-        if (ui.current_state == STATE_BOOT) {
-            ui.boot_timer++;
-            if (ui.boot_timer > 120) {  // 2 seconds at 60fps
-                ui_transition(&ui, STATE_TITLE);
+            // Update animation timers INSIDE vsync block (once per frame)
+            ui.transition_timer++;
+            ui.cursor_blink_timer++;
+            if (ui.current_state == STATE_BOOT) {
+                ui.boot_timer++;
+                if (ui.boot_timer > 120) {  // 2 seconds at 60fps
+                    ui_transition(&ui, STATE_TITLE);
+                }
             }
         }
     }

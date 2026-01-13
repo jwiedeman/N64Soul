@@ -128,12 +128,40 @@ void ui_go_back(UIState* ui) {
 // Track previous buttons to detect edges
 static uint16_t prev_buttons = 0;
 
+// Track previous stick state for debouncing
+static int8_t prev_stick_y = 0;
+static int stick_repeat_delay = 0;
+
 static int button_pressed(uint16_t buttons, uint16_t button) {
     return (buttons & button) && !(prev_buttons & button);
 }
 
+// Check if analog stick just crossed threshold (edge detection)
+static int stick_up_pressed(int8_t stick_y) {
+    if (stick_y > 50 && prev_stick_y <= 50) return 1;
+    // Allow repeat after delay
+    if (stick_y > 50 && stick_repeat_delay == 0) {
+        stick_repeat_delay = 10; // 10 frames between repeats
+        return 1;
+    }
+    return 0;
+}
+
+static int stick_down_pressed(int8_t stick_y) {
+    if (stick_y < -50 && prev_stick_y >= -50) return 1;
+    // Allow repeat after delay
+    if (stick_y < -50 && stick_repeat_delay == 0) {
+        stick_repeat_delay = 10;
+        return 1;
+    }
+    return 0;
+}
+
 void ui_handle_input(UIState* ui, uint16_t buttons,
                      int8_t stick_x, int8_t stick_y) {
+    // Decrement stick repeat delay
+    if (stick_repeat_delay > 0) stick_repeat_delay--;
+
     switch (ui->current_state) {
         case STATE_BOOT:
             // Any button skips boot
@@ -152,13 +180,13 @@ void ui_handle_input(UIState* ui, uint16_t buttons,
         case STATE_MENU_MAIN:
         case STATE_MENU_LOAD:
         case STATE_SIM_PAUSED:
-            // Navigate menu
-            if (button_pressed(buttons, BTN_DU) || stick_y > 50) {
+            // Navigate menu (with debounced analog stick)
+            if (button_pressed(buttons, BTN_DU) || stick_up_pressed(stick_y)) {
                 if (ui->menu_cursor > 0) {
                     ui->menu_cursor--;
                 }
             }
-            if (button_pressed(buttons, BTN_DD) || stick_y < -50) {
+            if (button_pressed(buttons, BTN_DD) || stick_down_pressed(stick_y)) {
                 if (ui->current_menu && ui->menu_cursor < ui->current_menu->item_count - 1) {
                     ui->menu_cursor++;
                 }
@@ -264,6 +292,7 @@ void ui_handle_input(UIState* ui, uint16_t buttons,
     }
 
     prev_buttons = buttons;
+    prev_stick_y = stick_y;
 }
 
 // =============================================================================
@@ -325,8 +354,8 @@ void ui_render_title(int timer) {
     // Animated subtitle
     render_text(SCREEN_WIDTH/2 - 60, 90, "CODENAME: DEEP PADDLE", COLOR_AMBER_WARN);
 
-    // Blinking "press start"
-    if ((timer / 30) % 2 == 0) {
+    // Blinking "press start" - 45 frames on, 45 off (1.5 second cycle at 60fps)
+    if ((timer / 45) % 2 == 0) {
         render_text(SCREEN_WIDTH/2 - 48, 160, "- PRESS START -", COLOR_TERMINAL_GREEN);
     }
 
