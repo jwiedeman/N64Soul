@@ -125,18 +125,11 @@ void ui_go_back(UIState* ui) {
 // INPUT HANDLING
 // =============================================================================
 
-// Track previous buttons to detect edges
-static uint16_t prev_buttons = 0;
-
-// Track previous stick state for debouncing
+// Track previous stick state for debouncing (analog stick repeat)
 static int8_t prev_stick_y = 0;
 static int stick_repeat_delay = 0;
 
-static int button_pressed(uint16_t buttons, uint16_t button) {
-    return (buttons & button) && !(prev_buttons & button);
-}
-
-// Check if analog stick just crossed threshold (edge detection)
+// Check if analog stick just crossed threshold (edge detection with repeat)
 static int stick_up_pressed(int8_t stick_y) {
     if (stick_y > 50 && prev_stick_y <= 50) return 1;
     // Allow repeat after delay
@@ -157,6 +150,8 @@ static int stick_down_pressed(int8_t stick_y) {
     return 0;
 }
 
+// Note: 'buttons' parameter now contains only buttons JUST PRESSED this frame
+// (edge detection is done by joypad_get_buttons_pressed in main.c)
 void ui_handle_input(UIState* ui, uint16_t buttons,
                      int8_t stick_x, int8_t stick_y) {
     // Decrement stick repeat delay
@@ -171,8 +166,8 @@ void ui_handle_input(UIState* ui, uint16_t buttons,
             break;
 
         case STATE_TITLE:
-            if (button_pressed(buttons, BTN_START) ||
-                button_pressed(buttons, BTN_A)) {
+            // buttons already contains only newly pressed buttons
+            if (buttons & (BTN_START | BTN_A)) {
                 ui_transition(ui, STATE_MENU_MAIN);
             }
             break;
@@ -181,19 +176,19 @@ void ui_handle_input(UIState* ui, uint16_t buttons,
         case STATE_MENU_LOAD:
         case STATE_SIM_PAUSED:
             // Navigate menu (with debounced analog stick)
-            if (button_pressed(buttons, BTN_DU) || stick_up_pressed(stick_y)) {
+            if ((buttons & BTN_DU) || stick_up_pressed(stick_y)) {
                 if (ui->menu_cursor > 0) {
                     ui->menu_cursor--;
                 }
             }
-            if (button_pressed(buttons, BTN_DD) || stick_down_pressed(stick_y)) {
+            if ((buttons & BTN_DD) || stick_down_pressed(stick_y)) {
                 if (ui->current_menu && ui->menu_cursor < ui->current_menu->item_count - 1) {
                     ui->menu_cursor++;
                 }
             }
 
             // Select
-            if (button_pressed(buttons, BTN_A) || button_pressed(buttons, BTN_START)) {
+            if (buttons & (BTN_A | BTN_START)) {
                 if (ui->current_menu && ui->menu_cursor < ui->current_menu->item_count) {
                     MenuItem* item = &ui->current_menu->items[ui->menu_cursor];
                     if (item->type == MENU_ACTION) {
@@ -203,7 +198,7 @@ void ui_handle_input(UIState* ui, uint16_t buttons,
             }
 
             // Back
-            if (button_pressed(buttons, BTN_B)) {
+            if (buttons & BTN_B) {
                 if (ui->current_state == STATE_SIM_PAUSED) {
                     ui_transition(ui, STATE_SIM_TRAINING);
                 } else if (ui->current_state != STATE_MENU_MAIN) {
@@ -215,24 +210,24 @@ void ui_handle_input(UIState* ui, uint16_t buttons,
         case STATE_MENU_SETTINGS:
         case STATE_TRAINING_SETUP:
             // Tier selection with D-pad left/right
-            if (button_pressed(buttons, BTN_DL)) {
+            if (buttons & BTN_DL) {
                 if (ui->selected_tier > 0) {
                     ui->selected_tier--;
                 }
             }
-            if (button_pressed(buttons, BTN_DR)) {
+            if (buttons & BTN_DR) {
                 if (ui->selected_tier < TIER_SUPERHEAVY) {
                     ui->selected_tier++;
                 }
             }
 
             // Start training
-            if (button_pressed(buttons, BTN_START) || button_pressed(buttons, BTN_A)) {
+            if (buttons & (BTN_START | BTN_A)) {
                 ui_transition(ui, STATE_SIM_TRAINING);
             }
 
             // Back
-            if (button_pressed(buttons, BTN_B)) {
+            if (buttons & BTN_B) {
                 ui_transition(ui, STATE_MENU_MAIN);
             }
             break;
@@ -240,49 +235,49 @@ void ui_handle_input(UIState* ui, uint16_t buttons,
         case STATE_SIM_TRAINING:
         case STATE_SIM_WATCH:
             // Pause
-            if (button_pressed(buttons, BTN_START)) {
+            if (buttons & BTN_START) {
                 ui_transition(ui, STATE_SIM_PAUSED);
             }
 
             // Speed control
-            if (button_pressed(buttons, BTN_A)) {
+            if (buttons & BTN_A) {
                 ui->speed_multiplier *= 2;
                 if (ui->speed_multiplier > 16) ui->speed_multiplier = 16;
             }
-            if (button_pressed(buttons, BTN_B)) {
+            if (buttons & BTN_B) {
                 ui->speed_multiplier /= 2;
                 if (ui->speed_multiplier < 1) ui->speed_multiplier = 1;
             }
 
             // Switch to play mode
-            if (button_pressed(buttons, BTN_Z)) {
+            if (buttons & BTN_Z) {
                 ui_transition(ui, STATE_SIM_PLAY);
             }
             break;
 
         case STATE_SIM_PLAY:
             // Back to training
-            if (button_pressed(buttons, BTN_Z)) {
+            if (buttons & BTN_Z) {
                 ui_transition(ui, STATE_SIM_TRAINING);
             }
-            if (button_pressed(buttons, BTN_START)) {
+            if (buttons & BTN_START) {
                 ui_transition(ui, STATE_SIM_PAUSED);
             }
             break;
 
         case STATE_TUTORIAL:
             // Page navigation
-            if (button_pressed(buttons, BTN_DR) || button_pressed(buttons, BTN_A)) {
+            if (buttons & (BTN_DR | BTN_A)) {
                 if (ui->tutorial_page < ui->tutorial_page_count - 1) {
                     ui->tutorial_page++;
                 }
             }
-            if (button_pressed(buttons, BTN_DL)) {
+            if (buttons & BTN_DL) {
                 if (ui->tutorial_page > 0) {
                     ui->tutorial_page--;
                 }
             }
-            if (button_pressed(buttons, BTN_B)) {
+            if (buttons & BTN_B) {
                 ui_transition(ui, STATE_MENU_MAIN);
             }
             break;
@@ -291,7 +286,6 @@ void ui_handle_input(UIState* ui, uint16_t buttons,
             break;
     }
 
-    prev_buttons = buttons;
     prev_stick_y = stick_y;
 }
 

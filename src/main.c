@@ -44,7 +44,7 @@ static void init_all(void) {
     // Initialize libdragon subsystems
     display_init(RESOLUTION_320x240, DEPTH_16_BPP, 2, GAMMA_NONE, ANTIALIAS_RESAMPLE);
     rdpq_init();
-    controller_init();
+    joypad_init();  // Use modern joypad API instead of deprecated controller_init
     timer_init();
 
     // Initialize our systems
@@ -140,30 +140,34 @@ static void simulation_step(void) {
 int main(void) {
     init_all();
 
-    // Initialize controller data to zero to avoid garbage on real hardware
-    struct controller_data keys_pressed;
-    struct controller_data keys_held;
-    memset(&keys_pressed, 0, sizeof(keys_pressed));
-    memset(&keys_held, 0, sizeof(keys_held));
-
     while (1) {
-        // Scan controllers
-        controller_scan();
+        // Poll joypad (modern API - reads controllers asynchronously)
+        joypad_poll();
 
-        // Only read controller if one is connected
-        int controllers = get_controllers_present();
-        if (controllers & CONTROLLER_1_INSERTED) {
-            keys_pressed = get_keys_pressed();
-            keys_held = get_keys_down();
-        } else {
-            // No controller - zero out to prevent garbage input
-            memset(&keys_pressed, 0, sizeof(keys_pressed));
-            memset(&keys_held, 0, sizeof(keys_held));
+        // Read input from port 1 if connected
+        joypad_buttons_t buttons_pressed = {0};
+        joypad_inputs_t inputs = {0};
+
+        if (joypad_is_connected(JOYPAD_PORT_1)) {
+            buttons_pressed = joypad_get_buttons_pressed(JOYPAD_PORT_1);
+            inputs = joypad_get_inputs(JOYPAD_PORT_1);
         }
 
         // Handle input based on current state
-        ui_handle_input(&ui, keys_pressed.c[0].data,
-                       keys_held.c[0].x, keys_held.c[0].y);
+        // Convert joypad_buttons_t to a simple bitmask for ui_handle_input
+        uint16_t btn_mask = 0;
+        if (buttons_pressed.a) btn_mask |= 0x8000;      // A
+        if (buttons_pressed.b) btn_mask |= 0x4000;      // B
+        if (buttons_pressed.z) btn_mask |= 0x2000;      // Z
+        if (buttons_pressed.start) btn_mask |= 0x1000;  // Start
+        if (buttons_pressed.d_up) btn_mask |= 0x0800;   // D-Up
+        if (buttons_pressed.d_down) btn_mask |= 0x0400; // D-Down
+        if (buttons_pressed.d_left) btn_mask |= 0x0200; // D-Left
+        if (buttons_pressed.d_right) btn_mask |= 0x0100;// D-Right
+        if (buttons_pressed.l) btn_mask |= 0x0020;      // L
+        if (buttons_pressed.r) btn_mask |= 0x0010;      // R
+
+        ui_handle_input(&ui, btn_mask, inputs.stick_x, inputs.stick_y);
 
         // Run simulation steps based on speed multiplier
         if (ui.current_state == STATE_SIM_TRAINING ||
