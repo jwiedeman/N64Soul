@@ -34,12 +34,11 @@ static UIState ui;
 
 static void init_all(void) {
     // Initialize libdragon subsystems
-    // Modern libdragon uses different init
     display_init(RESOLUTION_320x240, DEPTH_16_BPP, 2, GAMMA_NONE, ANTIALIAS_RESAMPLE);
     rdpq_init();
     controller_init();
     timer_init();
-    dfs_init(DFS_DEFAULT_LOCATION);
+    // Note: dfs_init() removed - no filesystem embedded in ROM
 
     // Initialize our systems
     ui_init(&ui);
