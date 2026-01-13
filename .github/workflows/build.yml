@@ -1,0 +1,39 @@
+name: Build N64 ROM
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/dragonminded/libdragon:latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Build ROM
+      run: |
+        make -f Makefile.n64 clean all
+        ls -la *.z64 || echo "ROM not created"
+
+    - name: Upload ROM artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: neuron-rom
+        path: neuron.z64
+        if-no-files-found: error
+        retention-days: 30
+
+    - name: Create Release (on tag)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: neuron.z64
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
