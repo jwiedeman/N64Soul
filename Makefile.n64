@@ -13,6 +13,11 @@ SOURCES = src/main.c \
           src/ui.c \
           src/save.c
 
+# Detect N64_INST if not set (Docker container uses /n64_toolchain)
+ifeq ($(N64_INST),)
+    N64_INST := /n64_toolchain
+endif
+
 # Include libdragon build system
 include $(N64_INST)/include/n64.mk
 
