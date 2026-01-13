@@ -1,16 +1,33 @@
-# Build outputs
-**/target/
+# Build artifacts
+build/
+filesystem/
 *.z64
 *.n64
+*.v64
+*.elf
 *.o
 *.d
+*.dfs
 
-# Model blobs (never commit)
-/n64llm/n64-rust/assets/weights*.bin
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
 
-# Build artifacts
-artifacts/exports/**
-**/artifacts/
+# OS files
+.DS_Store
+Thumbs.db
 
-# Generated IPL3 dummy
+# Pre-trained checkpoints (large binary files)
+assets/checkpoints/*.bin
+
+# Emulator saves
+*.pak
+*.eep
+*.sra
+*.fla
+
+# Generated files
 ipl3_dummy.bin
