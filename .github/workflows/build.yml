@@ -15,17 +15,19 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Debug libdragon paths
+    - name: Clone and install libdragon
       run: |
-        docker run --rm ghcr.io/dragonminded/libdragon:latest sh -c "echo N64_INST=\$N64_INST && ls -la \$N64_INST 2>/dev/null || echo 'N64_INST not set or invalid' && find / -name 'n64.mk' 2>/dev/null | head -5"
+        git clone --depth 1 https://github.com/DragonMinded/libdragon.git /tmp/libdragon
 
     - name: Build ROM with libdragon Docker
       run: |
         docker run --rm \
           --mount type=bind,source=$(pwd),target=/project \
+          --mount type=bind,source=/tmp/libdragon,target=/libdragon \
           --workdir=/project \
+          -e N64_INST=/n64_toolchain \
           ghcr.io/dragonminded/libdragon:latest \
-          make -f Makefile.n64 clean all
+          sh -c "cd /libdragon && ./build.sh && cd /project && make -f Makefile.n64 clean all"
         ls -la *.z64 || echo "ROM not created"
 
     - name: Upload ROM artifact
