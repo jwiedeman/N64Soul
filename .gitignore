@@ -2,8 +2,9 @@
 build/
 filesystem/
 *.z64
-*.n64
 *.v64
+# ROMs (but not Makefile.n64)
+neuron.n64
 *.elf
 *.o
 *.d

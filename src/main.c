@@ -7,6 +7,7 @@
 #include <libdragon.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "../include/config.h"
 #include "neural_net.h"
@@ -33,7 +34,9 @@ static UIState ui;
 
 static void init_all(void) {
     // Initialize libdragon subsystems
-    display_init(RESOLUTION_320x240, DEPTH_16_BPP, 2, GAMMA_NONE, FILTERS_RESAMPLE);
+    // Modern libdragon uses different init
+    display_init(RESOLUTION_320x240, DEPTH_16_BPP, 2, GAMMA_NONE, ANTIALIAS_RESAMPLE);
+    rdpq_init();
     controller_init();
     timer_init();
     dfs_init(DFS_DEFAULT_LOCATION);
@@ -134,12 +137,12 @@ int main(void) {
     while (1) {
         // Scan controllers
         controller_scan();
-        struct controller_data keys = get_keys_pressed();
-        struct controller_data held = get_keys_down();
+        struct controller_data keys_pressed = get_keys_pressed();
+        struct controller_data keys_held = get_keys_down();
 
         // Handle input based on current state
-        ui_handle_input(&ui, keys.c[0].data,
-                       held.c[0].x, held.c[0].y);
+        ui_handle_input(&ui, keys_pressed.c[0].data,
+                       keys_held.c[0].x, keys_held.c[0].y);
 
         // Run simulation steps based on speed multiplier
         if (ui.current_state == STATE_SIM_TRAINING ||
