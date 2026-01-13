@@ -33,12 +33,19 @@ static UIState ui;
 // =============================================================================
 
 static void init_all(void) {
+    // Zero all global state first - real hardware may have garbage in memory
+    memset(&network, 0, sizeof(network));
+    memset(&training, 0, sizeof(training));
+    memset(&replay_buffer, 0, sizeof(replay_buffer));
+    memset(&pong, 0, sizeof(pong));
+    memset(&render_settings, 0, sizeof(render_settings));
+    memset(&ui, 0, sizeof(ui));
+
     // Initialize libdragon subsystems
     display_init(RESOLUTION_320x240, DEPTH_16_BPP, 2, GAMMA_NONE, ANTIALIAS_RESAMPLE);
     rdpq_init();
     controller_init();
     timer_init();
-    // Note: dfs_init() removed - no filesystem embedded in ROM
 
     // Initialize our systems
     ui_init(&ui);
@@ -133,11 +140,26 @@ static void simulation_step(void) {
 int main(void) {
     init_all();
 
+    // Initialize controller data to zero to avoid garbage on real hardware
+    struct controller_data keys_pressed;
+    struct controller_data keys_held;
+    memset(&keys_pressed, 0, sizeof(keys_pressed));
+    memset(&keys_held, 0, sizeof(keys_held));
+
     while (1) {
         // Scan controllers
         controller_scan();
-        struct controller_data keys_pressed = get_keys_pressed();
-        struct controller_data keys_held = get_keys_down();
+
+        // Only read controller if one is connected
+        int controllers = get_controllers_present();
+        if (controllers & CONTROLLER_1_INSERTED) {
+            keys_pressed = get_keys_pressed();
+            keys_held = get_keys_down();
+        } else {
+            // No controller - zero out to prevent garbage input
+            memset(&keys_pressed, 0, sizeof(keys_pressed));
+            memset(&keys_held, 0, sizeof(keys_held));
+        }
 
         // Handle input based on current state
         ui_handle_input(&ui, keys_pressed.c[0].data,
